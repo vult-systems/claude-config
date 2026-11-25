@@ -5,7 +5,7 @@ Shared Claude Code configuration for my Windows workstations: global development
 | Repo path | Installed to (`%USERPROFILE%\.claude`, or `$env:CLAUDE_CONFIG_DIR`) | How |
 |---|---|---|
 | `claude/CLAUDE.md` | `CLAUDE.md` | Managed block. Text outside the block is yours and is kept. |
-| `claude/settings.json` | `settings.json` | 3-way merge. Your other keys and locally changed values are kept. |
+| `claude/settings.json` | `settings.json` | 3-way merge of the shared security safeguards (a deny list for `.env`, `*.pem` and `~/.ssh`). Your other keys and locally changed values are kept. |
 | `claude/skills/` | `skills/` | Copied. Edited copies are detected and not overwritten. |
 | `claude/agents/` | `agents/` | Copied, same rules as skills. |
 
@@ -69,7 +69,7 @@ cd <repos>\claude-config
 
 **Edited a skill or `CLAUDE.md` block directly in `~/.claude`?** Run `sync.ps1 -Capture` to copy those edits into the repo, review `git diff`, commit, push, then run `sync.ps1` to record the new baseline. Settings are not captured; edit `claude/settings.json` by hand.
 
-**Per-machine settings** (a different theme, extra permissions) can be changed normally with `/config` or by editing `settings.json`. Sync keeps local values and reports the difference. Project permissions belong in each project's `.claude/settings.local.json`, which is never shared.
+**Personal settings** (model, theme, layout, extra permissions) aren't shared; new installs use Claude Code's defaults. Choose yours with `/config` or by editing `settings.json`. Sync keeps local values, and when the repo stops sharing a preference your current value stays. Project permissions belong in each project's `.claude/settings.local.json`, which is never shared.
 
 ### Backups and restore
 
@@ -112,7 +112,8 @@ The skills that push, merge, tag or release run only when you type them, and the
 | `The term 'Get-FileHash' is not recognized` | Fixed in this release: Windows PowerShell started from PowerShell 7 couldn't load it. Update the repo (`git pull`), or run `setup.cmd`. |
 | Claude Code on Windows complains about Git Bash | Install Git for Windows; Claude Code needs it. |
 | `... was modified locally; left unchanged` | Keep it: `sync.ps1 -Capture`, then commit. Discard it: `sync.ps1 -Force` (backed up). |
-| `settings.theme kept local value ...` | Informational: your local value differs from the repo. Change either side to match, or leave it. |
+| `settings.<key> kept local value ...` | Informational: your local value differs from the repo. Change either side to match, or leave it. |
+| `settings.<key> is no longer shared; kept your value ...` | Informational, shown once: the repo stopped sharing that preference (v1.0.0-rc.2 dropped `model`, `theme` and `tui`). Your value stays; change it with `/config` if you like. |
 | `settings.json is not valid JSON` | Fix the file (or `restore.ps1 -Latest`), then rerun. Sync never rewrites a file it can't parse. |
 | `Local branch has diverged from upstream` | In the repo, `git status` and `git log --oneline --graph --all -10`, resolve it, then rerun. |
 | Skills don't show up | Start a new session. Run `validate.ps1`. Check `~/.claude/skills/<name>/SKILL.md` exists. |

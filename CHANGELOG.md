@@ -4,6 +4,10 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+### Changed
+
+- Shared settings now hold only the security safeguards (the `.env`/`*.pem`/`~/.ssh` deny list). `model`, `theme` and `tui` are no longer shared, so new installs use Claude Code's defaults. Workstations that already have them keep their current values: when the repo stops sharing a preference, sync keeps your value instead of resetting it. (#8)
+
 ### Added
 
 - `setup.cmd` / `scripts/setup.ps1`: one-step, rerunnable workstation setup. Each step checks first and does only what's missing: it installs Git, GitHub CLI and native Claude Code per user without admin rights (asking first), keeps `PATH` up to date for the user and the running session, signs in to GitHub and Claude and sets the git identity only when needed, then installs the configuration and validates. It runs from Command Prompt, Windows Terminal or PowerShell on Windows PowerShell 5.1 or PowerShell 7. (#6)

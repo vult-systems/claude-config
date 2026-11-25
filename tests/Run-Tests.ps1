@@ -55,6 +55,14 @@ function Invoke-WithEnv([hashtable]$Vars, [scriptblock]$Block) {
         foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
     }
 }
+# Adds shared preferences to a sandbox repo, as v1.0.0-rc.1 shipped them, so
+# merge behaviour is tested independently of the current repo settings.
+function Add-RepoPreferences($Sb) {
+    $rs = Read-JsonFile (RepoFile $Sb 'settings.json')
+    $rs['model'] = 'opus'; $rs['theme'] = 'dark-daltonized'; $rs['tui'] = 'fullscreen'
+    $rs['statusLine'] = [ordered]@{ type = 'command'; command = 'echo shared' }
+    Write-JsonFile (RepoFile $Sb 'settings.json') $rs
+}
 function HomeFile($Sb, [string]$Rel) { return (Join-Path $Sb.Home (ConvertTo-NativeRel $Rel)) }
 function RepoFile($Sb, [string]$Rel) { return (Join-Path (Join-Path $Sb.Repo 'claude') (ConvertTo-NativeRel $Rel)) }
 
@@ -87,6 +95,7 @@ try {
 
     Write-Host '== existing configuration is preserved'
     $sb = New-Sandbox 'existing'
+    Add-RepoPreferences $sb
     New-Item -ItemType Directory -Path $sb.Home | Out-Null
     Write-TextFile (HomeFile $sb 'CLAUDE.md') "# My notes`r`nKeep this line.`r`n"
     Write-JsonFile (HomeFile $sb 'settings.json') ([ordered]@{
@@ -132,11 +141,13 @@ try {
 
     Write-Host '== settings updates propagate unless changed locally'
     $sb = New-Sandbox 'settings'
+    Add-RepoPreferences $sb
     [void](Install $sb)
     $rs = Read-JsonFile (RepoFile $sb 'settings.json')
     $rs['model'] = 'sonnet'
     $rs['permissions']['deny'] = @($rs['permissions']['deny'] | Where-Object { $_ -ne 'Read(**/*.pem)' })
     $rs.Remove('tui')
+    $rs.Remove('statusLine')
     Write-JsonFile (RepoFile $sb 'settings.json') $rs
     $local = Read-JsonFile (HomeFile $sb 'settings.json')
     $local['theme'] = 'light'
@@ -146,7 +157,30 @@ try {
     Check 'unchanged scalar updated' ($s['model'] -eq 'sonnet')
     Check 'locally changed scalar kept' ($s['theme'] -eq 'light')
     Check 'removed array item removed' (@($s['permissions']['deny']) -notcontains 'Read(**/*.pem)')
-    Check 'removed key removed' (-not $s.Contains('tui'))
+    Check 'removed object key removed' (-not $s.Contains('statusLine'))
+    Check 'removed scalar released, value kept' ($s['tui'] -eq 'fullscreen')
+    Check 'released scalar reported' (@($r.Notes | Where-Object { $_ -match 'settings\.tui is no longer shared' }).Count -eq 1)
+
+    Write-Host '== rc.1 preferences survive the move to security-only settings (#8)'
+    $sb = New-Sandbox 'prefs'
+    Add-RepoPreferences $sb
+    [void](Install $sb)
+    $local = Read-JsonFile (HomeFile $sb 'settings.json')
+    $local['theme'] = 'light'
+    Write-JsonFile (HomeFile $sb 'settings.json') $local
+    Copy-Item -LiteralPath (Join-Path (Join-Path $repoRoot 'claude') 'settings.json') -Destination (RepoFile $sb 'settings.json') -Force
+    $r = Install $sb
+    $s = Read-JsonFile (HomeFile $sb 'settings.json')
+    Check 'unchanged model kept' ($s['model'] -eq 'opus')
+    Check 'unchanged tui kept' ($s['tui'] -eq 'fullscreen')
+    Check 'locally changed theme kept' ($s['theme'] -eq 'light')
+    Check 'security deny list still applied' (@($s['permissions']['deny']).Count -eq 4)
+    $r = Install $sb
+    Check 'second run quiet' ($r.Changes.Count -eq 0 -and $r.Notes.Count -eq 0)
+    $fresh = New-Sandbox 'prefs-fresh'
+    [void](Install $fresh)
+    $s = Read-JsonFile (HomeFile $fresh 'settings.json')
+    Check 'fresh install gets Claude Code defaults' (-not ($s.Contains('model') -or $s.Contains('theme') -or $s.Contains('tui')))
 
     Write-Host '== removed skill is uninstalled'
     $sb = New-Sandbox 'removed'
