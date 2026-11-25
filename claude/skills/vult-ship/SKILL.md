@@ -1,11 +1,11 @@
 ---
-name: ship
+name: vult-ship
 description: Take the current work to a merged pull request - scope check, lint and tests, focused commits, push, PR referencing its issues, green CI, merge commit, post-merge check on the default branch.
 argument-hint: "[issue number]"
 disable-model-invocation: true
 ---
 
-# /ship
+# /vult-ship
 
 Related issue(s): $ARGUMENTS
 

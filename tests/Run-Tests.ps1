@@ -42,7 +42,7 @@ try {
     $sb = New-Sandbox 'fresh'
     $r = Install $sb
     Check 'no conflicts' ($r.Conflicts.Count -eq 0)
-    Check 'skills installed' (Test-Path (HomeFile $sb 'skills/ship/SKILL.md'))
+    Check 'skills installed' (Test-Path (HomeFile $sb 'skills/vult-ship/SKILL.md'))
     Check 'skill templates installed' (Test-Path (HomeFile $sb 'skills/init-project/templates/CLAUDE.md'))
     Check 'agent installed' (Test-Path (HomeFile $sb 'agents/production-reviewer.md'))
     $md = Read-TextFile (HomeFile $sb 'CLAUDE.md')
@@ -73,8 +73,8 @@ try {
             statusLine  = [ordered]@{ type = 'command'; command = 'echo hi' }
             permissions = [ordered]@{ allow = @('Bash(npm test)'); deny = @('Read(./secret.txt)') }
         })
-    New-Item -ItemType Directory -Path (Split-Path -Parent (HomeFile $sb 'skills/ship/SKILL.md')) -Force | Out-Null
-    Write-TextFile (HomeFile $sb 'skills/ship/SKILL.md') "my own ship skill`n"
+    New-Item -ItemType Directory -Path (Split-Path -Parent (HomeFile $sb 'skills/vult-ship/SKILL.md')) -Force | Out-Null
+    Write-TextFile (HomeFile $sb 'skills/vult-ship/SKILL.md') "my own ship skill`n"
     $r = Install $sb
     $md = Read-TextFile (HomeFile $sb 'CLAUDE.md')
     Check 'user CLAUDE.md content kept' ($md -match 'Keep this line\.')
@@ -86,15 +86,15 @@ try {
     Check 'local allow kept, none added' ((@($s['permissions']['allow']) -join ',') -eq 'Bash(npm test)')
     Check 'deny lists unioned' (@($s['permissions']['deny']).Count -eq 5)
     Check 'repo model added' ($s['model'] -eq 'opus')
-    Check 'unmanaged skill not overwritten' ((Read-TextFile (HomeFile $sb 'skills/ship/SKILL.md')) -eq "my own ship skill`n")
-    Check 'unmanaged skill reported' (@($r.Conflicts | Where-Object { $_ -match 'skills/ship/SKILL.md' }).Count -eq 1)
+    Check 'unmanaged skill not overwritten' ((Read-TextFile (HomeFile $sb 'skills/vult-ship/SKILL.md')) -eq "my own ship skill`n")
+    Check 'unmanaged skill reported' (@($r.Conflicts | Where-Object { $_ -match 'skills/vult-ship/SKILL.md' }).Count -eq 1)
     $bk = @(Get-Backups $sb.Home)
     Check 'originals backed up' ($bk.Count -eq 1 -and (Test-Path (Join-Path $bk[0].FullName 'settings.json')) -and (Test-Path (Join-Path $bk[0].FullName 'CLAUDE.md')))
 
     Write-Host '== -Force replaces with backup'
     $r = Install $sb -Force
-    Check 'forced skill replaced' ((Get-FileHashHex (HomeFile $sb 'skills/ship/SKILL.md')) -eq (Get-FileHashHex (RepoFile $sb 'skills/ship/SKILL.md')))
-    Check 'forced original in backup' ((Read-TextFile (Join-Path $r.BackupDir 'skills\ship\SKILL.md')) -eq "my own ship skill`n")
+    Check 'forced skill replaced' ((Get-FileHashHex (HomeFile $sb 'skills/vult-ship/SKILL.md')) -eq (Get-FileHashHex (RepoFile $sb 'skills/vult-ship/SKILL.md')))
+    Check 'forced original in backup' ((Read-TextFile (Join-Path $r.BackupDir 'skills\vult-ship\SKILL.md')) -eq "my own ship skill`n")
     Check 'force does not override local settings' ((Read-JsonFile (HomeFile $sb 'settings.json'))['theme'] -eq 'light')
 
     Write-Host '== local edits survive updates'
@@ -136,6 +136,18 @@ try {
     Check 'empty skill folder removed' (-not (Test-Path (Split-Path -Parent (HomeFile $sb 'skills/handoff/SKILL.md'))))
     Check 'skills folder kept' (Test-Path (Join-Path $sb.Home 'skills'))
 
+    Write-Host '== renamed skill migrates (ship -> vult-ship, #3)'
+    $sb = New-Sandbox 'rename'
+    Rename-Item -LiteralPath (Split-Path -Parent (RepoFile $sb 'skills/vult-ship/SKILL.md')) -NewName 'ship'
+    [void](Install $sb)
+    Check 'old name installed first' (Test-Path (HomeFile $sb 'skills/ship/SKILL.md'))
+    Rename-Item -LiteralPath (Split-Path -Parent (RepoFile $sb 'skills/ship/SKILL.md')) -NewName 'vult-ship'
+    $r = Install $sb
+    Check 'rename: no conflicts' ($r.Conflicts.Count -eq 0)
+    Check 'rename: old skill folder removed' (-not (Test-Path (Split-Path -Parent (HomeFile $sb 'skills/ship/SKILL.md'))))
+    Check 'rename: new skill installed' (Test-Path (HomeFile $sb 'skills/vult-ship/SKILL.md'))
+    Check 'rename: state tracks only new name' (-not (Read-State $sb.Home)['files'].Contains('skills/ship/SKILL.md'))
+
     Write-Host '== invalid settings.json is left alone'
     $sb = New-Sandbox 'invalid'
     New-Item -ItemType Directory -Path $sb.Home | Out-Null
@@ -174,19 +186,35 @@ try {
         & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $sb.Repo 'scripts\restore.ps1') -Latest | Out-Null
         Check 'restore exit code 0' ($LASTEXITCODE -eq 0)
         Check 'restore brought back original settings' (Test-JsonEqual (Read-JsonFile (HomeFile $sb 'settings.json')) ([ordered]@{ theme = 'light' }))
-        Check 'restore removed created files' (-not (Test-Path (HomeFile $sb 'skills/ship/SKILL.md')))
+        Check 'restore removed created files' (-not (Test-Path (HomeFile $sb 'skills/vult-ship/SKILL.md')))
         Check 'restore kept a pre-restore backup' (@(Get-Backups $sb.Home).Count -eq 2)
 
         [void](Install $sb -Force)
-        Add-Content -LiteralPath (HomeFile $sb 'skills/ship/SKILL.md') -Value 'captured edit'
+        Add-Content -LiteralPath (HomeFile $sb 'skills/vult-ship/SKILL.md') -Value 'captured edit'
         & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $sb.Repo 'scripts\sync.ps1') -Capture | Out-Null
         Check 'capture exit code 0' ($LASTEXITCODE -eq 0)
-        Check 'capture copied edit into repo' ((Read-TextFile (RepoFile $sb 'skills/ship/SKILL.md')) -match 'captured edit')
+        Check 'capture copied edit into repo' ((Read-TextFile (RepoFile $sb 'skills/vult-ship/SKILL.md')) -match 'captured edit')
         & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $sb.Repo 'scripts\sync.ps1') -NoPull | Out-Null
         Check 'sync after capture is clean' ($LASTEXITCODE -eq 0)
     } finally {
         $env:CLAUDE_CONFIG_DIR = $oldHome
     }
+
+    Write-Host '== validate rejects skills named after built-in commands (#3)'
+    $vr = Join-Path $work 'validate-repo'
+    New-Item -ItemType Directory -Path $vr | Out-Null
+    foreach ($item in @(Get-ChildItem -LiteralPath $repoRoot -Force | Where-Object { $_.Name -ne '.git' })) {
+        Copy-Item -LiteralPath $item.FullName -Destination $vr -Recurse
+    }
+    $ps = (Get-Process -Id $PID).Path
+    & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly | Out-Null
+    Check 'validate passes on a clean copy' ($LASTEXITCODE -eq 0)
+    $shipDir = Join-Path $vr 'claude\skills\ship'
+    New-Item -ItemType Directory -Path $shipDir | Out-Null
+    Write-TextFile (Join-Path $shipDir 'SKILL.md') "---`nname: ship`ndescription: clashes with a built-in`n---`n"
+    $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
+    Check 'validate fails on a built-in name' ($LASTEXITCODE -eq 1)
+    Check 'failure names the conflict' ($out -match 'skills/ship: conflicts with a built-in')
 } catch {
     $script:failed++
     Write-Host "  [FAIL] unexpected error: $($_.Exception.Message)`n$($_.ScriptStackTrace)" -ForegroundColor Red
