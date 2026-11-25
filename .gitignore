@@ -1,0 +1,32 @@
+# Never commit credentials, conversation history, caches or machine state.
+# (validate.ps1 also fails on these if they are force-added.)
+.credentials.json
+.claude.json
+settings.local.json
+claude-config.state.json
+*.jsonl
+.env
+.env.*
+*.pem
+*.key
+backups/
+cache/
+debug/
+file-history/
+paste-cache/
+plugins/
+projects/
+sessions/
+session-env/
+shell-snapshots/
+statsig/
+telemetry/
+todos/
+*.log
+
+# Editors / OS
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
