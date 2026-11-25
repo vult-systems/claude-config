@@ -258,6 +258,119 @@ try {
         & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -Strict | Out-Null
     }
     Check '-Strict exits 2 on warnings' ($LASTEXITCODE -eq 2)
+
+    Write-Host '== PATH helpers (#6)'
+    Check 'adds a missing entry' ((Add-PathEntry 'C:\a;C:\b' 'C:\c') -eq 'C:\a;C:\b;C:\c')
+    Check 'adds to an empty PATH' ((Add-PathEntry '' 'C:\c') -eq 'C:\c')
+    Check 'drops empty segments when adding' ((Add-PathEntry 'C:\a;;C:\b;' 'C:\c') -eq 'C:\a;C:\b;C:\c')
+    Check 'case and trailing slash are equivalent' ((Add-PathEntry 'C:\A\Bin\;C:\b' 'c:\a\bin') -eq 'C:\A\Bin\;C:\b')
+    Check '%VAR% entries match their expansion' (Test-PathContains '%USERPROFILE%\.local\bin' (Join-Path $env:USERPROFILE '.local\bin'))
+    $key = "HKCU:\Software\claude-config-tests\$([guid]::NewGuid().ToString('N'))"
+    try {
+        New-Item -Path $key -Force | Out-Null
+        New-ItemProperty -LiteralPath $key -Name Path -Value '%SystemRoot%\x;C:\y' -PropertyType ExpandString | Out-Null
+        Check 'user PATH add reports a change' (Add-UserPathEntry -Entry 'C:\z' -RegistryKey $key)
+        Check 'user PATH keeps %VAR% unexpanded' ((Get-UserPathRaw $key) -eq '%SystemRoot%\x;C:\y;C:\z')
+        Check 'user PATH stays REG_EXPAND_SZ' ((Get-Item -LiteralPath $key).GetValueKind('Path') -eq 'ExpandString')
+        Check 'user PATH add is idempotent' (-not (Add-UserPathEntry -Entry 'C:\Z\' -RegistryKey $key))
+        Check 'dry run reports without writing' ((Add-UserPathEntry -Entry 'C:\w' -RegistryKey $key -DryRun $true) -and (Get-UserPathRaw $key) -notmatch 'w$')
+        $oldPath = $env:Path
+        try {
+            $env:Path = 'C:\session-only'
+            Update-SessionPath $key
+            Check 'session refresh keeps session entries first' ($env:Path.StartsWith('C:\session-only;'))
+            Check 'session refresh adds user entries' ($env:Path -match [regex]::Escape('C:\z'))
+        } finally { $env:Path = $oldPath }
+    } finally { Remove-Item -LiteralPath (Split-Path -Parent $key) -Recurse -Force -ErrorAction SilentlyContinue }
+
+    Write-Host '== Claude Code installation detection (#6)'
+    $fx = Join-Path $work 'detect'
+    $fxProfile = Join-Path $fx 'profile'; $fxLocal = Join-Path $fx 'local'; $fxRoaming = Join-Path $fx 'roaming'; $fxPf = Join-Path $fx 'pf'
+    foreach ($d in @($fxProfile, $fxLocal, $fxRoaming, $fxPf)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+    $detect = { Find-ClaudeInstallations -UserProfile $fxProfile -LocalAppData $fxLocal -AppData $fxRoaming -ProgramFiles $fxPf }
+    Check 'nothing installed: nothing found' (@(& $detect).Count -eq 0)
+    New-Item -ItemType Directory -Path (Join-Path $fxProfile '.local\bin') -Force | Out-Null
+    Write-TextFile (Join-Path $fxProfile '.local\bin\claude.exe') 'x'
+    $found = @(& $detect)
+    Check 'native install found' ($found.Count -eq 1 -and $found[0].Kind -eq 'native')
+    New-Item -ItemType Directory -Path (Join-Path $fxLocal 'Microsoft\WinGet\Packages\Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe') -Force | Out-Null
+    $found = @(& $detect)
+    Check 'winget package folder found (user)' (@($found | Where-Object { $_.Kind -eq 'winget' -and $_.Scope -eq 'user' }).Count -eq 1)
+    New-Item -ItemType Directory -Path (Join-Path $fxLocal 'Microsoft\WinGet\Links') -Force | Out-Null
+    Write-TextFile (Join-Path $fxLocal 'Microsoft\WinGet\Links\claude.exe') 'x'
+    $found = @(& $detect)
+    Check 'winget link preferred and not duplicated' (@($found | Where-Object { $_.Kind -eq 'winget' }).Count -eq 1 -and @($found | Where-Object { $_.Kind -eq 'winget' })[0].Path -match 'Links')
+    New-Item -ItemType Directory -Path (Join-Path $fxPf 'WinGet\Links') -Force | Out-Null
+    Write-TextFile (Join-Path $fxPf 'WinGet\Links\claude.exe') 'x'
+    New-Item -ItemType Directory -Path (Join-Path $fxRoaming 'npm') -Force | Out-Null
+    Write-TextFile (Join-Path $fxRoaming 'npm\claude.cmd') 'x'
+    $found = @(& $detect)
+    Check 'machine winget and npm found' (@($found | Where-Object { $_.Scope -eq 'machine' }).Count -eq 1 -and @($found | Where-Object { $_.Kind -eq 'npm' }).Count -eq 1)
+    New-Item -ItemType Directory -Path (Join-Path $fxLocal 'Microsoft\WinGet\Packages\Other.Tool_x') -Force | Out-Null
+    Check 'unrelated winget package ignored' (@(& $detect).Count -eq 4)
+
+    Write-Host '== validate warns about a WinGet copy of Claude Code (#6)'
+    $fakeNew = New-FakeTools (Join-Path $work 'fake-new')
+    $out = Invoke-WithEnv @{ Path = $fakeNew; CLAUDE_CONFIG_DIR = $sb.Home; LOCALAPPDATA = $fxLocal; APPDATA = (Join-Path $work 'empty') } {
+        & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') 6>&1 2>&1 | Out-String
+    }
+    Check 'winget copy reported' ($out -match 'also installed via winget')
+    Check 'winget copy counted' ($out -match 'passed with 1 warning\(s\)')
+
+    Write-Host '== setup.cmd end to end (#6)'
+    # Fake tools that are installed and signed in, a fake native Claude Code in
+    # a scratch profile, and a scratch registry key instead of the user PATH.
+    # setup.cmd always runs Windows PowerShell 5.1, so under PowerShell 7 this
+    # also covers starting 5.1 from a 7 session.
+    $sx = Join-Path $work 'setup'
+    $sxProfile = Join-Path $sx 'profile'; $sxLocal = Join-Path $sx 'local'
+    New-Item -ItemType Directory -Path (Join-Path $sxProfile '.local\bin') -Force | Out-Null
+    New-Item -ItemType Directory -Path $sxLocal -Force | Out-Null
+    Write-TextFile (Join-Path $sxProfile '.local\bin\claude.exe') 'placeholder'
+    $sxHome = Join-Path $sx 'claude-home'
+    $sxKey = "HKCU:\Software\claude-config-tests\$([guid]::NewGuid().ToString('N'))"
+    $elevated = Test-IsElevated
+    $okCode = 0; if ($elevated) { $okCode = 2 }   # running elevated is a warning (CI runners are)
+    $setupEnv = @{ Path = $fakeNew; CLAUDE_CONFIG_DIR = $sxHome; USERPROFILE = $sxProfile; LOCALAPPDATA = $sxLocal; APPDATA = (Join-Path $work 'empty') }
+    $runSetup = {
+        param([string[]]$Extra)
+        $argList = @('/c', (Join-Path $vr 'setup.cmd'), '-NonInteractive', '-PathRegistryKey', $sxKey) + $Extra
+        Invoke-WithEnv $setupEnv { & cmd.exe @argList 2>&1 | Out-String }
+    }
+    try {
+        $out = & $runSetup @('-DryRun')
+        Check 'dry run exits 0' ($LASTEXITCODE -eq 0)
+        Check 'dry run installs nothing' (-not (Test-Path $sxHome))
+        Check 'dry run leaves PATH alone' (-not (Test-Path $sxKey))
+        Check 'dry run says what it would add' ($out -match '\(dry run\) added .*\.local\\bin to your user PATH')
+
+        $out = & $runSetup @()
+        Check "setup exits $okCode" ($LASTEXITCODE -eq $okCode)
+        Check 'setup installed the configuration' (Test-Path (Join-Path $sxHome 'skills\vult-ship\SKILL.md'))
+        Check 'setup added the native bin to user PATH' (Test-PathContains (Get-UserPathRaw $sxKey) (Join-Path $sxProfile '.local\bin'))
+        Check 'setup reports sign-in state' ($out -match 'GitHub CLI signed in' -and $out -match 'Claude Code signed in' -and $out -match 'git identity configured')
+        Check 'setup validated' ($out -match 'Validation passed')
+        $warnLines = @([regex]::Matches($out, '\[warn\][^\r\n]*') | ForEach-Object { $_.Value } | Where-Object { $_ -notmatch 'administrator|finished with' })
+        Check 'setup has no unexpected warnings' ($warnLines.Count -eq 0)
+        if ($warnLines.Count -gt 0) { Write-Host ($warnLines -join "`n") }
+
+        $out = & $runSetup @()
+        Check "rerun exits $okCode" ($LASTEXITCODE -eq $okCode)
+        Check 'rerun changes nothing' ($out -match 'Already up to date' -and $out -notmatch 'to your user PATH')
+        Check 'rerun does not duplicate the PATH entry' (@((Get-UserPathRaw $sxKey) -split ';' | Where-Object { $_ -like '*.local\bin' }).Count -eq 1)
+
+        New-Item -ItemType Directory -Path (Join-Path $sxLocal 'Microsoft\WinGet\Links') -Force | Out-Null
+        Write-TextFile (Join-Path $sxLocal 'Microsoft\WinGet\Links\claude.exe') 'x'
+        $out = & $runSetup @()
+        Check 'conflict: exits 2' ($LASTEXITCODE -eq 2)
+        Check 'conflict: reported with the remove command' ($out -match 'winget uninstall --id Anthropic.ClaudeCode')
+        Check 'conflict: nothing removed without confirmation' (Test-Path (Join-Path $sxLocal 'Microsoft\WinGet\Links\claude.exe'))
+
+        $out = & $runSetup @('-NoInstall', '-SkipAuth')
+        Check '-NoInstall -SkipAuth runs without prompting' ($LASTEXITCODE -eq 2 -and $out -match 'Sign-in \(skipped\)')
+    } finally {
+        Remove-Item -LiteralPath (Split-Path -Parent $sxKey) -Recurse -Force -ErrorAction SilentlyContinue
+    }
 } catch {
     $script:failed++
     Write-Host "  [FAIL] unexpected error: $($_.Exception.Message)`n$($_.ScriptStackTrace)" -ForegroundColor Red
