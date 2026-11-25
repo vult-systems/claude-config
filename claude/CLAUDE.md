@@ -57,4 +57,4 @@ These apply to every project on this workstation. A project's own `CLAUDE.md` ta
 
 ## Workflow skills
 
-`/init-project`, `/production-audit`, `/issue`, `/ship`, `/hotfix`, `/release-candidate`, `/promote-stable`, `/handoff`, `/resume-project`. They follow the project's own `CLAUDE.md` where it defines a different procedure.
+`/init-project`, `/production-audit`, `/issue`, `/vult-ship`, `/hotfix`, `/release-candidate`, `/promote-stable`, `/handoff`, `/resume-project`. They follow the project's own `CLAUDE.md` where it defines a different procedure.

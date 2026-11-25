@@ -92,14 +92,14 @@ A restore also backs up the current state first, so it can be undone.
 | `/init-project` | Add project CLAUDE.md, CHANGELOG, version source, .gitignore, CI and labels to a repository, without overwriting what exists. |
 | `/production-audit` | Read-only audit against the standards; ranked findings with evidence. |
 | `/issue` | Duplicate check, then a well-formed bug, enhancement, tech-debt or acceptance issue. |
-| `/ship` | Scope check, tests, focused commits, PR, green CI, merge commit, post-merge check. |
+| `/vult-ship` | Scope check, tests, focused commits, PR, green CI, merge commit, post-merge check. |
 | `/hotfix` | Reproduction, regression test, minimal fix, PR, patch RC. |
 | `/release-candidate` | Version bump and changelog via PR, `vX.Y.Z-rc.N` tag, draft pre-release, acceptance issue. |
 | `/promote-stable` | Gate on acceptance and no code change since the RC, then tag `vX.Y.Z` and draft the release. |
 | `/handoff` | Push the branch and post a structured handoff note on its draft PR. |
 | `/resume-project` | Sync the branch, read CLAUDE.md, the latest handoff note and CI status, then summarise the next steps. |
 
-The skills that push, merge, tag or release run only when you type them, and they confirm before each outward-facing step. The `production-reviewer` agent gives a read-only review of a diff or PR; `/ship` uses it for non-trivial changes.
+The skills that push, merge, tag or release run only when you type them, and they confirm before each outward-facing step. The `production-reviewer` agent gives a read-only review of a diff or PR; `/vult-ship` uses it for non-trivial changes.
 
 ## Troubleshooting
 
