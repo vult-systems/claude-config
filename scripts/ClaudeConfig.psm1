@@ -81,8 +81,13 @@ function Get-TextHash([string]$Text) {
     } finally { $sha.Dispose() }
 }
 
+# .NET instead of Get-FileHash: Windows PowerShell 5.1 started from a
+# PowerShell 7 session inherits its PSModulePath and cannot load Get-FileHash.
 function Get-FileHashHex([string]$Path) {
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '') }
+    finally { $stream.Dispose(); $sha.Dispose() }
 }
 
 function ConvertTo-Lf([string]$Text) {
