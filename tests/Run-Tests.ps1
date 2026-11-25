@@ -58,6 +58,11 @@ try {
     Check 'no changes on rerun' ($r.Changes.Count -eq 0)
     Check 'no new backup on rerun' (@(Get-Backups $sb.Home).Count -eq $backupsBefore)
     Check 'drift all ok' (@(Get-InstallDrift -RepoRoot $sb.Repo -ClaudeHome $sb.Home | Where-Object { $_.Status -ne 'ok' }).Count -eq 0)
+    Write-TextFile (Join-Path $sb.Repo 'VERSION') "9.9.9`n"
+    $r = Install $sb
+    Check 'version-only change: no changes reported' ($r.Changes.Count -eq 0)
+    Check 'version-only change: no backup' (@(Get-Backups $sb.Home).Count -eq $backupsBefore)
+    Check 'version-only change: state updated' ((Read-State $sb.Home)['version'] -eq '9.9.9')
 
     Write-Host '== existing configuration is preserved'
     $sb = New-Sandbox 'existing'

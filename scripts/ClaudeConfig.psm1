@@ -525,8 +525,10 @@ function Invoke-ClaudeConfigInstall {
             }
             $stateChanged = -not (Test-JsonEqual $a $b)
         }
+        # Back up the state file only alongside real changes, so a restore
+        # stays consistent; a new commit or version alone needs no backup.
+        if ($ctx.Changes.Count -gt 0) { Save-Backup $ctx $script:StateFileName }
         if ($stateChanged -or $ctx.Changes.Count -gt 0) {
-            Save-Backup $ctx $script:StateFileName
             Write-JsonFile -Path (Get-StatePath $ClaudeHome) -Value $newState
         }
         Complete-Backup $ctx 'install'
