@@ -34,6 +34,27 @@ function New-Sandbox([string]$Name) {
 function Install($Sb, [switch]$Force) {
     return (Invoke-ClaudeConfigInstall -RepoRoot $Sb.Repo -ClaudeHome $Sb.Home -Force:$Force)
 }
+# Writes fake git, gh and claude .cmd shims (signed in, identity set) into $Dir
+# and returns a PATH holding only them and System32, so tool checks are
+# deterministic and no real tool is run.
+function New-FakeTools([string]$Dir, [string]$ClaudeVersion = '9.9.9') {
+    New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+    $shims = @{
+        'claude.cmd' = @('@echo off', "if `"%~1`"==`"--version`" echo $ClaudeVersion Claude Code", 'if "%~1"=="auth" echo {"loggedIn":true}', 'exit /b 0')
+        'gh.cmd'     = @('@echo off', 'if "%~1"=="--version" echo gh version 2.100.0', 'exit /b 0')
+        'git.cmd'    = @('@echo off', 'if "%~1"=="--version" (echo git version 2.50.0& exit /b 0)', 'if "%~1"=="config" (echo Test User& exit /b 0)', 'exit /b 1')
+    }
+    foreach ($k in $shims.Keys) { Write-TextFile (Join-Path $Dir $k) (($shims[$k] -join "`r`n") + "`r`n") }
+    return "$Dir;$(Join-Path $env:SystemRoot 'System32')"
+}
+# Runs $Block with environment variables temporarily set, then restores them.
+function Invoke-WithEnv([hashtable]$Vars, [scriptblock]$Block) {
+    $saved = @{}
+    foreach ($k in $Vars.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process'); [Environment]::SetEnvironmentVariable($k, $Vars[$k], 'Process') }
+    try { & $Block } finally {
+        foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
+    }
+}
 function HomeFile($Sb, [string]$Rel) { return (Join-Path $Sb.Home (ConvertTo-NativeRel $Rel)) }
 function RepoFile($Sb, [string]$Rel) { return (Join-Path (Join-Path $Sb.Repo 'claude') (ConvertTo-NativeRel $Rel)) }
 
@@ -215,6 +236,27 @@ try {
     $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
     Check 'validate fails on a built-in name' ($LASTEXITCODE -eq 1)
     Check 'failure names the conflict' ($out -match 'skills/ship: conflicts with a built-in')
+    Remove-Item -LiteralPath $shipDir -Recurse -Force
+
+    Write-Host '== validate counts every warning it prints (#5)'
+    # Fake tools on a controlled PATH: claude is older than the tested version,
+    # pwsh and winget are absent (optional, so information only).
+    $fake = New-FakeTools (Join-Path $work 'fake-old') -ClaudeVersion '2.0.0'
+    $sb = New-Sandbox 'warncount'
+    [void](Install $sb)
+    $out = Invoke-WithEnv @{ Path = $fake; CLAUDE_CONFIG_DIR = $sb.Home; LOCALAPPDATA = (Join-Path $work 'empty'); APPDATA = (Join-Path $work 'empty') } {
+        & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') 6>&1 2>&1 | Out-String
+    }
+    $code = $LASTEXITCODE
+    $printed = ([regex]::Matches($out, '\[warn\]')).Count
+    Check 'old Claude Code is a warning' ($out -match 'older than the tested version')
+    Check 'missing pwsh is information, not a warning' ($out -match 'pwsh not found \(optional\)' -and $out -notmatch '\[warn\][^\n]*pwsh')
+    Check 'summary counts the printed warnings' ($out -match 'passed with 1 warning\(s\)' -and $printed -eq 2)
+    Check 'warnings alone exit 0' ($code -eq 0)
+    Invoke-WithEnv @{ Path = $fake; CLAUDE_CONFIG_DIR = $sb.Home; LOCALAPPDATA = (Join-Path $work 'empty'); APPDATA = (Join-Path $work 'empty') } {
+        & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -Strict | Out-Null
+    }
+    Check '-Strict exits 2 on warnings' ($LASTEXITCODE -eq 2)
 } catch {
     $script:failed++
     Write-Host "  [FAIL] unexpected error: $($_.Exception.Message)`n$($_.ScriptStackTrace)" -ForegroundColor Red

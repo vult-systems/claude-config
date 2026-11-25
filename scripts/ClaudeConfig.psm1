@@ -621,13 +621,16 @@ function Get-VersionFromText([string]$Text) {
     return $null
 }
 
+# Checks the tools and prints one line each. Returns { Missing; Warnings }:
+# every [warn] printed here is counted in Warnings, so callers can report an
+# accurate total (#5). Optional tools that are missing are information only.
 function Test-Tools {
-    $missingRequired = 0
+    $result = [pscustomobject]@{ Missing = 0; Warnings = 0 }
     foreach ($t in (Get-ToolSpecs)) {
         $cmd = Get-Command $t.Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $cmd) {
-            if ($t.Required) { Write-CcFail "$($t.Name) not found. Install: $($t.Install)"; $missingRequired++ }
-            else { Write-CcWarn "$($t.Name) not found (recommended). Install: $($t.Install)" }
+            if ($t.Required) { Write-CcFail "$($t.Name) not found. Install: $($t.Install)"; $result.Missing++ }
+            else { Write-CcInfo "$($t.Name) not found (optional). Install: $($t.Install)" }
             continue
         }
         $r = Invoke-Exe -FilePath $cmd.Source -Arguments $t.Args
@@ -637,11 +640,12 @@ function Test-Tools {
             try {
                 if ([version]$ver -lt [version]$script:TestedClaudeVersion) {
                     Write-CcWarn "Claude Code $ver is older than the tested version $($script:TestedClaudeVersion); run: claude update"
+                    $result.Warnings++
                 }
             } catch { }
         }
     }
-    return $missingRequired
+    return $result
 }
 
 function Test-Auth {
