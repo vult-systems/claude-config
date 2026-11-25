@@ -31,12 +31,12 @@ The paste works on a machine with neither Git nor GitHub CLI. It installs Git fo
 1. **Tools**: offers to install Git for Windows and GitHub CLI for your user (`winget --scope user`, no admin rights), and Claude Code with the official native installer. If winget isn't set up yet on a new Windows profile, it registers App Installer for your user first.
 2. **One Claude Code**: standardizes on the native install, which updates itself. A copy installed with WinGet or npm shadows it on `PATH` and goes stale. Setup offers to remove that copy, and removes nothing unless you answer yes (default No).
 3. **PATH**: adds `%USERPROFILE%\.local\bin` to your user `PATH` if needed and refreshes the running session. Setup never edits the machine `PATH`.
-4. **Sign-in**, only where needed: GitHub CLI (browser), git credentials (`gh auth setup-git`, only if git can't already reach GitHub), git `user.name`/`user.email` (it suggests your GitHub name and private noreply address), and Claude Code (browser).
+4. **Sign-in**, only where needed: GitHub CLI (browser), git credentials (`gh auth setup-git`, offered only if git can't already reach GitHub), git `user.name`/`user.email` (it suggests your GitHub name and private noreply address), and Claude Code (browser).
 5. **Configuration**: backs up anything it replaces, installs, and validates, the same as `bootstrap.ps1`.
 
 If setup is interrupted or a step fails, fix the problem and run it again; finished steps are skipped. It exits 0 when done, 1 when something still needs fixing, and 2 when it finished with warnings. When it's done, open a new terminal, start `claude`, and type `/` to see the skills.
 
-Options (pass them to `setup.cmd` or `setup.ps1`): `-DryRun` shows what would happen; `-NoInstall` installs and removes no software; `-SkipAuth` skips sign-in; `-NonInteractive` never prompts and prints the commands to run instead; `-Yes` accepts install and sign-in prompts (removals still ask); `-Force` replaces managed files you edited locally, after backing them up.
+Options (pass them to `setup.cmd` or `setup.ps1`): `-DryRun` shows what would happen; `-NoInstall` only reports: it installs and removes no software and leaves `PATH` alone; `-SkipAuth` skips sign-in; `-NonInteractive` never prompts and prints the commands to run instead; `-Yes` accepts install and sign-in prompts (removals still ask); `-Force` replaces managed files you edited locally, after backing them up.
 
 Setup never elevates, changes the execution policy or grants permissions. `-ExecutionPolicy RemoteSigned` in `setup.cmd` applies to that one process only. It can't override a Group Policy, and you shouldn't try to. PowerShell 7 is optional: everything runs on Windows PowerShell 5.1.
 
@@ -106,8 +106,9 @@ The skills that push, merge, tag or release run only when you type them, and the
 | `winget` is not recognized | Common on a new Windows profile. `setup.cmd` registers App Installer for you. For the first paste, run `Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe`, or update "App Installer" from the Microsoft Store, then paste again. |
 | An install asks for administrator approval | Setup only uses per-user installs. If a prompt still appears, cancel it and ask IT rather than working around it. |
 | `git`, `gh` or `claude` not found right after setup | Setup fixes `PATH` for its own session and your user account. Terminals that were already open keep their old `PATH`, so open a new one. |
-| `Claude Code is also installed via winget` / `npm` | Run `setup.cmd` and confirm removal, or run `winget uninstall --id Anthropic.ClaudeCode -e` / `npm uninstall -g @anthropic-ai/claude-code`. A machine-wide WinGet copy needs IT. |
+| `Claude Code is also installed via winget` / `npm` | Run `setup.cmd` and confirm removal, or run `winget uninstall --id Anthropic.ClaudeCode -e --scope user` / `npm uninstall -g @anthropic-ai/claude-code`. A machine-wide WinGet copy needs IT. |
 | `Running as administrator` | Close the elevated window and run setup from a normal terminal, so tools and configuration go to your own account. |
+| `setup.cmd` is not recognized after pasting | The clone was interrupted and left a partial folder. Delete `$HOME\repos\claude-config` and paste again. |
 | `The term 'Get-FileHash' is not recognized` | Fixed in this release: Windows PowerShell started from PowerShell 7 couldn't load it. Update the repo (`git pull`), or run `setup.cmd`. |
 | Claude Code on Windows complains about Git Bash | Install Git for Windows; Claude Code needs it. |
 | `... was modified locally; left unchanged` | Keep it: `sync.ps1 -Capture`, then commit. Discard it: `sync.ps1 -Force` (backed up). |

@@ -33,7 +33,7 @@
     command to run.
 
 .PARAMETER NoInstall
-    Do not install or remove software; only report what is missing.
+    Do not install or remove software or change PATH; only report what is missing.
 
 .PARAMETER SkipAuth
     Skip the sign-in and git identity steps.
@@ -46,7 +46,7 @@
 
 .EXAMPLE
     .\setup.cmd
-    From Command Prompt, Windows Terminal, PowerShell or Explorer.
+    From Command Prompt, Windows Terminal or PowerShell.
 
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\setup.ps1
@@ -169,10 +169,12 @@ if ($native.Count -eq 0) {
 }
 if ($native.Count -gt 0) {
     Write-CcOk "native install: $($native[0].Path)"
-    if (Add-UserPathEntry -Entry $nativeBin -RegistryKey $PathRegistryKey -DryRun ([bool]$DryRun)) {
+    if ($NoInstall) {
+        if (-not (Test-PathContains (Get-UserPathRaw $PathRegistryKey) $nativeBin)) { Warn "$nativeBin is not on your user PATH; rerun setup without -NoInstall to add it" }
+    } elseif (Add-UserPathEntry -Entry $nativeBin -RegistryKey $PathRegistryKey -DryRun ([bool]$DryRun)) {
         Write-CcInfo "${dry}added $nativeBin to your user PATH"
     }
-    if (-not $DryRun) { Update-SessionPath $PathRegistryKey }
+    if (-not $DryRun -and -not $NoInstall) { Update-SessionPath $PathRegistryKey }
 }
 
 # Standardise on the native install: other copies shadow it on PATH and do
@@ -184,9 +186,10 @@ foreach ($o in $others) {
         Warn "$what is installed for all users; removing it needs admin rights. Ask IT to run: winget uninstall --id Anthropic.ClaudeCode -e"
         continue
     }
-    $removeCmd = 'winget uninstall --id Anthropic.ClaudeCode -e'
+    # --scope user so winget never picks a machine-wide copy (which would need elevation).
+    $removeCmd = 'winget uninstall --id Anthropic.ClaudeCode -e --scope user'
     $tool = 'winget'
-    $removeArgs = @('uninstall', '--id', 'Anthropic.ClaudeCode', '-e', '--disable-interactivity')
+    $removeArgs = @('uninstall', '--id', 'Anthropic.ClaudeCode', '-e', '--scope', 'user', '--disable-interactivity')
     if ($o.Kind -eq 'npm') {
         $removeCmd = 'npm uninstall -g @anthropic-ai/claude-code'
         $tool = 'npm'
@@ -242,12 +245,11 @@ if ($SkipAuth) {
             try { $reach = (Invoke-Git -RepoRoot $repo -Arguments @('ls-remote', '--heads', 'origin')).Code -eq 0 }
             finally { $env:GIT_TERMINAL_PROMPT = $saved[0]; $env:GCM_INTERACTIVE = $saved[1] }
             if ($reach) { Write-CcOk 'git can reach GitHub' }
-            elseif ($DryRun) { Write-CcInfo '(dry run) would run: gh auth setup-git' }
-            else {
+            elseif (Confirm-Action 'git cannot reach GitHub without prompting. Let git use your GitHub CLI sign-in (gh auth setup-git)?') {
                 $r = Invoke-Exe -FilePath 'gh' -Arguments @('auth', 'setup-git', '--hostname', 'github.com')
                 if ($r.Code -eq 0) { Write-CcOk 'git now uses GitHub CLI credentials (gh auth setup-git)' }
                 else { Warn "gh auth setup-git failed: $($r.Output -join ' ')" }
-            }
+            } elseif (-not $DryRun) { Warn 'git cannot reach GitHub without prompting (offline, or no credentials). If signing in is the problem, run: gh auth setup-git' }
         }
     }
 

@@ -283,6 +283,15 @@ try {
         } finally { $env:Path = $oldPath }
     } finally { Remove-Item -LiteralPath (Split-Path -Parent $key) -Recurse -Force -ErrorAction SilentlyContinue }
 
+    Write-Host '== attached commands (#6)'
+    Check 'plain arguments unquoted' ((ConvertTo-ArgumentString @('auth', '--web')) -eq 'auth --web')
+    Check 'spaces quoted' ((ConvertTo-ArgumentString @('a b')) -eq '"a b"')
+    Check 'trailing backslash doubled inside quotes' ((ConvertTo-ArgumentString @('C:\a b\')) -eq '"C:\a b\\"')
+    Check 'embedded quote escaped' ((ConvertTo-ArgumentString @('say "hi"')) -eq '"say \"hi\""')
+    $fakeGit = Join-Path (Join-Path $work 'fake-old') 'git.cmd'
+    Check 'attached command returns exit 0' ((Invoke-Attached $fakeGit @('--version')) -eq 0)
+    Check 'attached command returns non-zero exit' ((Invoke-Attached $fakeGit @('nope')) -eq 1)
+
     Write-Host '== Claude Code installation detection (#6)'
     $fx = Join-Path $work 'detect'
     $fxProfile = Join-Path $fx 'profile'; $fxLocal = Join-Path $fx 'local'; $fxRoaming = Join-Path $fx 'roaming'; $fxPf = Join-Path $fx 'pf'
@@ -366,8 +375,14 @@ try {
         Check 'conflict: reported with the remove command' ($out -match 'winget uninstall --id Anthropic.ClaudeCode')
         Check 'conflict: nothing removed without confirmation' (Test-Path (Join-Path $sxLocal 'Microsoft\WinGet\Links\claude.exe'))
 
+        $out = & $runSetup @('-Yes')
+        Check '-Yes: removal still not done without an explicit answer' ((Test-Path (Join-Path $sxLocal 'Microsoft\WinGet\Links\claude.exe')) -and $out -match 'was kept|Remove it with')
+
         $out = & $runSetup @('-NoInstall', '-SkipAuth')
         Check '-NoInstall -SkipAuth runs without prompting' ($LASTEXITCODE -eq 2 -and $out -match 'Sign-in \(skipped\)')
+        Remove-Item -LiteralPath $sxKey -Recurse -Force
+        $out = & $runSetup @('-NoInstall', '-SkipAuth')
+        Check '-NoInstall reports PATH instead of changing it' ((-not (Test-Path $sxKey)) -and $out -match 'is not on your user PATH')
     } finally {
         Remove-Item -LiteralPath (Split-Path -Parent $sxKey) -Recurse -Force -ErrorAction SilentlyContinue
     }

@@ -811,21 +811,33 @@ function Read-YesNo([string]$Question, [bool]$Default = $true) {
     }
 }
 
+# Quotes arguments for a Windows command line (CommandLineToArgvW rules):
+# backslashes before a quote, or before the closing quote, are doubled.
 function ConvertTo-ArgumentString([string[]]$Arguments) {
     $quoted = foreach ($a in $Arguments) {
-        if ($a -match '[\s"]' -or $a -eq '') { '"' + ($a -replace '"', '\"') + '"' } else { $a }
+        if ($a -match '[\s"]' -or $a -eq '') {
+            '"' + (($a -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1') + '"'
+        } else { $a }
     }
     return ($quoted -join ' ')
 }
 
 # Runs a command attached to this console (real TTY, live output, prompts and
-# browser sign-in work) and returns its exit code.
+# browser sign-in work) and returns its exit code. Waits for that process only,
+# not its descendants, so a browser opened during sign-in does not block setup
+# (Start-Process -Wait would wait for the whole process tree).
 function Invoke-Attached([string]$FilePath, [string[]]$Arguments = @()) {
     $cmd = Get-Command $FilePath -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $cmd) { Write-CcFail "$FilePath not found"; return 127 }
-    $p = @{ FilePath = $cmd.Source; NoNewWindow = $true; Wait = $true; PassThru = $true }
-    if ($Arguments.Count -gt 0) { $p['ArgumentList'] = (ConvertTo-ArgumentString $Arguments) }
-    try { return (Start-Process @p).ExitCode } catch { Write-CcFail "$FilePath failed: $($_.Exception.Message)"; return 1 }
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $cmd.Source
+    $psi.Arguments = ConvertTo-ArgumentString $Arguments
+    $psi.UseShellExecute = $false
+    try {
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $p.WaitForExit()
+        return $p.ExitCode
+    } catch { Write-CcFail "$FilePath failed: $($_.Exception.Message)"; return 1 }
 }
 
 Export-ModuleMember -Function *
