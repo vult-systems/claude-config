@@ -250,7 +250,8 @@ try {
     $code = $LASTEXITCODE
     $printed = ([regex]::Matches($out, '\[warn\]')).Count
     Check 'old Claude Code is a warning' ($out -match 'older than the tested version')
-    Check 'missing pwsh is information, not a warning' ($out -match 'pwsh not found \(optional\)' -and $out -notmatch '\[warn\][^\n]*pwsh')
+    # (PowerShell 7 puts its own folder on PATH, so check winget, absent in both.)
+    Check 'missing optional tool is information, not a warning' ($out -match 'winget not found \(optional\)' -and $out -notmatch '\[warn\][^\n]*(pwsh|winget)')
     Check 'summary counts the printed warnings' ($out -match 'passed with 1 warning\(s\)' -and $printed -eq 2)
     Check 'warnings alone exit 0' ($code -eq 0)
     Invoke-WithEnv @{ Path = $fake; CLAUDE_CONFIG_DIR = $sb.Home; LOCALAPPDATA = (Join-Path $work 'empty'); APPDATA = (Join-Path $work 'empty') } {
