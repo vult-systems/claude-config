@@ -113,7 +113,7 @@ The skills that push, merge, tag or release run only when you type them, and the
 | `settings.json is not valid JSON` | Fix the file (or `restore.ps1 -Latest`), then rerun. Sync never rewrites a file it can't parse. |
 | `Local branch has diverged from upstream` | In the repo, `git status` and `git log --oneline --graph --all -10`, resolve it, then rerun. |
 | Skills don't show up | Start a new session. Run `validate.ps1`. Check `~/.claude/skills/<name>/SKILL.md` exists. |
-| A skill name clashes with a built-in command | User skills appear in the `/` menu alongside built-ins. If one is shadowed, rename the folder and its `name:` and update `validate.ps1`. |
+| A skill name clashes with a built-in command | `validate.ps1` rejects names on its list of known built-ins (that's why the ship skill is `/vult-ship`). If a newer Claude Code adds a clashing command, rename the skill folder and its `name:`, and add the built-in name to `$reservedNames` in `validate.ps1`. |
 
 ## Repository maintenance
 

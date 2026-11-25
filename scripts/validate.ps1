@@ -39,6 +39,21 @@ function Warn([string]$m) { Write-CcWarn $m; $script:warnings++ }
 $expectedSkills = @('init-project', 'production-audit', 'issue', 'hotfix', 'vult-ship',
     'release-candidate', 'promote-stable', 'handoff', 'resume-project')
 
+# Built-in Claude Code command names and aliases a skill must not reuse, or one
+# of them may shadow the other (#3). Collected on Claude Code 2.1.332 from a
+# headless session's command list and the binary's command registrations
+# (e.g. ship-local registers the alias "ship"). Extend when re-validating.
+$reservedNames = @(
+    'add-dir', 'advisor', 'agents', 'autocompact', 'batch', 'bug', 'clear', 'code-review',
+    'color', 'compact', 'config', 'context', 'cost', 'debug', 'deep-research', 'design',
+    'doctor', 'effort', 'exit', 'export', 'fast', 'feedback', 'focus', 'goal', 'help',
+    'hooks', 'ide', 'import', 'init', 'insights', 'install-github-app', 'login', 'logout',
+    'loop', 'mcp', 'memory', 'model', 'output-style', 'permissions', 'plan', 'plugin',
+    'pr-comments', 'recap', 'release-notes', 'reload-plugins', 'reload-skills', 'rename',
+    'resume', 'review', 'rewind', 'run', 'schedule', 'security-review', 'ship', 'ship-local',
+    'simplify', 'skill-doctor', 'statusline', 'status', 'steward', 'tasks', 'theme',
+    'ultrareview', 'update-config', 'upgrade', 'usage', 'verify', 'vim')
+
 function Get-Frontmatter([string]$Path) {
     $lines = (ConvertTo-Lf (Read-TextFile $Path)) -split "`n"
     $fm = @{}
@@ -85,6 +100,7 @@ foreach ($dir in @(Get-ChildItem -LiteralPath $skillsDir -Directory)) {
     if ($null -eq $fm) { Fail "skills/$($dir.Name)/SKILL.md has no frontmatter"; continue }
     if ($fm['name'] -ne $dir.Name) { Fail "skills/$($dir.Name): name '$($fm['name'])' does not match the folder" }
     if ($dir.Name -notmatch '^[a-z0-9-]{1,64}$') { Fail "skills/$($dir.Name): name must be lowercase letters, digits and hyphens" }
+    if ($reservedNames -contains $dir.Name) { Fail "skills/$($dir.Name): conflicts with a built-in Claude Code command; rename it" }
     if (-not $fm['description']) { Fail "skills/$($dir.Name): description is empty" }
 }
 $agentsDir = Join-Path $sourceDir 'agents'

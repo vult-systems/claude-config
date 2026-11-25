@@ -199,6 +199,22 @@ try {
     } finally {
         $env:CLAUDE_CONFIG_DIR = $oldHome
     }
+
+    Write-Host '== validate rejects skills named after built-in commands (#3)'
+    $vr = Join-Path $work 'validate-repo'
+    New-Item -ItemType Directory -Path $vr | Out-Null
+    foreach ($item in @(Get-ChildItem -LiteralPath $repoRoot -Force | Where-Object { $_.Name -ne '.git' })) {
+        Copy-Item -LiteralPath $item.FullName -Destination $vr -Recurse
+    }
+    $ps = (Get-Process -Id $PID).Path
+    & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly | Out-Null
+    Check 'validate passes on a clean copy' ($LASTEXITCODE -eq 0)
+    $shipDir = Join-Path $vr 'claude\skills\ship'
+    New-Item -ItemType Directory -Path $shipDir | Out-Null
+    Write-TextFile (Join-Path $shipDir 'SKILL.md') "---`nname: ship`ndescription: clashes with a built-in`n---`n"
+    $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
+    Check 'validate fails on a built-in name' ($LASTEXITCODE -eq 1)
+    Check 'failure names the conflict' ($out -match 'skills/ship: conflicts with a built-in')
 } catch {
     $script:failed++
     Write-Host "  [FAIL] unexpected error: $($_.Exception.Message)`n$($_.ScriptStackTrace)" -ForegroundColor Red
