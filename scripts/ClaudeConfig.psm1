@@ -81,8 +81,13 @@ function Get-TextHash([string]$Text) {
     } finally { $sha.Dispose() }
 }
 
+# .NET instead of Get-FileHash: Windows PowerShell 5.1 started from a
+# PowerShell 7 session inherits its PSModulePath and cannot load Get-FileHash.
 function Get-FileHashHex([string]$Path) {
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '') }
+    finally { $stream.Dispose(); $sha.Dispose() }
 }
 
 function ConvertTo-Lf([string]$Text) {
@@ -607,10 +612,10 @@ function Get-SettingsDivergence([string]$RepoRoot, [string]$ClaudeHome) {
 
 function Get-ToolSpecs {
     return @(
-        @{ Name = 'git'; Required = $true; Args = @('--version'); Install = 'winget install --id Git.Git -e --source winget' },
-        @{ Name = 'gh'; Required = $true; Args = @('--version'); Install = 'winget install --id GitHub.cli -e --source winget' },
+        @{ Name = 'git'; Required = $true; Args = @('--version'); Install = 'setup.ps1, or: winget install --id Git.Git -e --source winget --scope user' },
+        @{ Name = 'gh'; Required = $true; Args = @('--version'); Install = 'setup.ps1, or: winget install --id GitHub.cli -e --source winget --scope user' },
         @{ Name = 'claude'; Required = $true; Args = @('--version'); Install = 'irm https://claude.ai/install.ps1 | iex   (per-user, no admin)' },
-        @{ Name = 'pwsh'; Required = $false; Args = @('--version'); Install = 'winget install --id Microsoft.PowerShell -e --source winget' },
+        @{ Name = 'pwsh'; Required = $false; Args = @('--version'); Install = 'winget install --id Microsoft.PowerShell -e --source winget --scope user' },
         @{ Name = 'winget'; Required = $false; Args = @('--version'); Install = 'Install "App Installer" from the Microsoft Store' }
     )
 }
@@ -621,13 +626,16 @@ function Get-VersionFromText([string]$Text) {
     return $null
 }
 
+# Checks the tools and prints one line each. Returns { Missing; Warnings }:
+# every [warn] printed here is counted in Warnings, so callers can report an
+# accurate total (#5). Optional tools that are missing are information only.
 function Test-Tools {
-    $missingRequired = 0
+    $result = [pscustomobject]@{ Missing = 0; Warnings = 0 }
     foreach ($t in (Get-ToolSpecs)) {
         $cmd = Get-Command $t.Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $cmd) {
-            if ($t.Required) { Write-CcFail "$($t.Name) not found. Install: $($t.Install)"; $missingRequired++ }
-            else { Write-CcWarn "$($t.Name) not found (recommended). Install: $($t.Install)" }
+            if ($t.Required) { Write-CcFail "$($t.Name) not found. Install: $($t.Install)"; $result.Missing++ }
+            else { Write-CcInfo "$($t.Name) not found (optional). Install: $($t.Install)" }
             continue
         }
         $r = Invoke-Exe -FilePath $cmd.Source -Arguments $t.Args
@@ -637,34 +645,199 @@ function Test-Tools {
             try {
                 if ([version]$ver -lt [version]$script:TestedClaudeVersion) {
                     Write-CcWarn "Claude Code $ver is older than the tested version $($script:TestedClaudeVersion); run: claude update"
+                    $result.Warnings++
                 }
             } catch { }
         }
     }
-    return $missingRequired
+    foreach ($i in (Find-ClaudeInstallations)) {
+        if ($i.Kind -eq 'native') { continue }
+        Write-CcWarn "Claude Code is also installed via $($i.Kind) ($($i.Path)); run setup.ps1 to keep only the native install"
+        $result.Warnings++
+    }
+    return $result
+}
+
+function Test-GhAuth {
+    $r = Invoke-Exe -FilePath 'gh' -Arguments @('auth', 'status', '--hostname', 'github.com')
+    return ($r.Code -eq 0)
+}
+
+function Test-ClaudeAuth {
+    $r = Invoke-Exe -FilePath 'claude' -Arguments @('auth', 'status')
+    try { return [bool]((ConvertFrom-Json -InputObject ($r.Output -join "`n")).loggedIn) } catch { return $false }
+}
+
+function Test-GitIdentity {
+    $n = Invoke-Exe -FilePath 'git' -Arguments @('config', '--global', 'user.name')
+    $e = Invoke-Exe -FilePath 'git' -Arguments @('config', '--global', 'user.email')
+    return ($n.Code -eq 0 -and $e.Code -eq 0)
 }
 
 function Test-Auth {
     $problems = 0
     if (Get-Command gh -ErrorAction SilentlyContinue) {
-        $r = Invoke-Exe -FilePath 'gh' -Arguments @('auth', 'status', '--hostname', 'github.com')
-        if ($r.Code -eq 0) { Write-CcOk 'GitHub CLI authenticated' }
-        else { Write-CcWarn 'GitHub CLI not authenticated. Run: gh auth login --hostname github.com --git-protocol https --web'; $problems++ }
+        if (Test-GhAuth) { Write-CcOk 'GitHub CLI authenticated' }
+        else { Write-CcWarn 'GitHub CLI not authenticated. Run setup.ps1, or: gh auth login --hostname github.com --git-protocol https --web'; $problems++ }
     }
     if (Get-Command claude -ErrorAction SilentlyContinue) {
-        $r = Invoke-Exe -FilePath 'claude' -Arguments @('auth', 'status')
-        $loggedIn = $false
-        try { $loggedIn = [bool]((ConvertFrom-Json -InputObject ($r.Output -join "`n")).loggedIn) } catch { }
-        if ($loggedIn) { Write-CcOk 'Claude Code signed in' }
-        else { Write-CcWarn 'Claude Code not signed in. Run: claude auth login   (or start claude and use /login)'; $problems++ }
+        if (Test-ClaudeAuth) { Write-CcOk 'Claude Code signed in' }
+        else { Write-CcWarn 'Claude Code not signed in. Run setup.ps1, or: claude auth login   (or start claude and use /login)'; $problems++ }
     }
     if (Get-Command git -ErrorAction SilentlyContinue) {
-        $n = Invoke-Exe -FilePath 'git' -Arguments @('config', '--global', 'user.name')
-        $e = Invoke-Exe -FilePath 'git' -Arguments @('config', '--global', 'user.email')
-        if ($n.Code -eq 0 -and $e.Code -eq 0) { Write-CcOk 'git identity configured' }
-        else { Write-CcWarn 'git identity not set. Run: git config --global user.name "<name>"; git config --global user.email "<email>"'; $problems++ }
+        if (Test-GitIdentity) { Write-CcOk 'git identity configured' }
+        else { Write-CcWarn 'git identity not set. Run setup.ps1, or: git config --global user.name "<name>"; git config --global user.email "<email>"'; $problems++ }
     }
     return $problems
+}
+
+# ---------------------------------------------------------------- onboarding (setup.ps1)
+
+$script:UserEnvKey = 'HKCU:\Environment'
+$script:ClaudeWingetId = 'Anthropic.ClaudeCode'
+
+# Normalised form of a PATH entry for comparison: env vars expanded, no
+# surrounding quotes or trailing separator, case-insensitive.
+function Get-PathEntryKey([string]$Entry) {
+    $e = [Environment]::ExpandEnvironmentVariables($Entry.Trim().Trim('"')).TrimEnd('\', '/')
+    return $e.ToLowerInvariant()
+}
+
+function Get-PathEntries([string]$PathValue) {
+    if (-not $PathValue) { return , @() }
+    return , @($PathValue -split ';' | Where-Object { $_.Trim() })
+}
+
+function Test-PathContains([string]$PathValue, [string]$Entry) {
+    $key = Get-PathEntryKey $Entry
+    foreach ($e in (Get-PathEntries $PathValue)) { if ((Get-PathEntryKey $e) -eq $key) { return $true } }
+    return $false
+}
+
+# Returns $PathValue with $Entry appended unless an equivalent entry exists.
+function Add-PathEntry([string]$PathValue, [string]$Entry) {
+    if (Test-PathContains $PathValue $Entry) { return $PathValue }
+    $entries = Get-PathEntries $PathValue
+    return ((@($entries) + $Entry) -join ';')
+}
+
+# The user PATH as stored (unexpanded, so %VAR% entries survive a rewrite).
+function Get-UserPathRaw([string]$RegistryKey = $script:UserEnvKey) {
+    if (-not (Test-Path -LiteralPath $RegistryKey)) { return '' }
+    $v = (Get-Item -LiteralPath $RegistryKey).GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+    if ($null -eq $v) { return '' }
+    return [string]$v
+}
+
+# Adds $Entry to the user PATH (REG_EXPAND_SZ, like Windows writes it).
+# Returns $true when it changed something. Never touches the machine PATH.
+function Add-UserPathEntry([string]$Entry, [string]$RegistryKey = $script:UserEnvKey, [bool]$DryRun = $false) {
+    $raw = Get-UserPathRaw $RegistryKey
+    if (Test-PathContains $raw $Entry) { return $false }
+    if ($DryRun) { return $true }
+    if (-not (Test-Path -LiteralPath $RegistryKey)) { New-Item -Path $RegistryKey -Force | Out-Null }
+    New-ItemProperty -LiteralPath $RegistryKey -Name 'Path' -Value (Add-PathEntry $raw $Entry) -PropertyType ExpandString -Force | Out-Null
+    if ($RegistryKey -eq $script:UserEnvKey) {
+        # Setting a user variable through .NET broadcasts WM_SETTINGCHANGE, so
+        # terminals opened from now on see the new PATH without signing out.
+        [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_PATH_REFRESH', '1', 'User')
+        [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_PATH_REFRESH', $null, 'User')
+    }
+    return $true
+}
+
+# Refreshes this session's PATH from the machine and user PATH, so tools
+# installed by this run (or another terminal) are found without restarting.
+# Existing session entries stay first.
+function Update-SessionPath([string]$RegistryKey = $script:UserEnvKey) {
+    $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $user = [Environment]::ExpandEnvironmentVariables((Get-UserPathRaw $RegistryKey))
+    $result = $env:Path
+    foreach ($e in (Get-PathEntries $machine) + (Get-PathEntries $user)) { $result = Add-PathEntry $result $e }
+    $env:Path = $result
+}
+
+function Get-NativeClaudeBin([string]$UserProfile = $env:USERPROFILE) {
+    return (Join-Path (Join-Path $UserProfile '.local') 'bin')
+}
+
+# Finds Claude Code installations by their known locations. Returns objects
+# { Kind = native|winget|npm; Scope = user|machine; Path }. Only the native
+# install (official installer, self-updating) is the standard.
+function Find-ClaudeInstallations {
+    param(
+        [string]$UserProfile = $env:USERPROFILE,
+        [string]$LocalAppData = $env:LOCALAPPDATA,
+        [string]$AppData = $env:APPDATA,
+        [string]$ProgramFiles = $env:ProgramFiles
+    )
+    $found = New-Object System.Collections.Generic.List[object]
+    $native = Join-Path (Get-NativeClaudeBin $UserProfile) 'claude.exe'
+    if (Test-Path -LiteralPath $native -PathType Leaf) { $found.Add([pscustomobject]@{ Kind = 'native'; Scope = 'user'; Path = $native }) }
+    $wingetRoots = @()
+    if ($LocalAppData) { $wingetRoots += , @('user', (Join-Path (Join-Path $LocalAppData 'Microsoft') 'WinGet')) }
+    if ($ProgramFiles) { $wingetRoots += , @('machine', (Join-Path $ProgramFiles 'WinGet')) }
+    foreach ($w in $wingetRoots) {
+        $link = Join-Path (Join-Path $w[1] 'Links') 'claude.exe'
+        $pkgDir = Join-Path $w[1] 'Packages'
+        $pkg = $null
+        if (Test-Path -LiteralPath $pkgDir) {
+            $pkg = Get-ChildItem -LiteralPath $pkgDir -Directory -Filter "$($script:ClaudeWingetId)_*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        }
+        if (Test-Path -LiteralPath $link) { $found.Add([pscustomobject]@{ Kind = 'winget'; Scope = $w[0]; Path = $link }) }
+        elseif ($pkg) { $found.Add([pscustomobject]@{ Kind = 'winget'; Scope = $w[0]; Path = $pkg.FullName }) }
+    }
+    if ($AppData) {
+        $npm = Join-Path (Join-Path $AppData 'npm') 'claude.cmd'
+        if (Test-Path -LiteralPath $npm) { $found.Add([pscustomobject]@{ Kind = 'npm'; Scope = 'user'; Path = $npm }) }
+    }
+    # Unrolled so callers can pipe it; wrap calls in @() for a count.
+    return $found.ToArray()
+}
+
+function Test-IsElevated {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    return (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Read-YesNo([string]$Question, [bool]$Default = $true) {
+    $hint = '[Y/n]'
+    if (-not $Default) { $hint = '[y/N]' }
+    while ($true) {
+        $a = (Read-Host "  ? $Question $hint").Trim().ToLowerInvariant()
+        if (-not $a) { return $Default }
+        if (@('y', 'yes') -contains $a) { return $true }
+        if (@('n', 'no') -contains $a) { return $false }
+    }
+}
+
+# Quotes arguments for a Windows command line (CommandLineToArgvW rules):
+# backslashes before a quote, or before the closing quote, are doubled.
+function ConvertTo-ArgumentString([string[]]$Arguments) {
+    $quoted = foreach ($a in $Arguments) {
+        if ($a -match '[\s"]' -or $a -eq '') {
+            '"' + (($a -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1') + '"'
+        } else { $a }
+    }
+    return ($quoted -join ' ')
+}
+
+# Runs a command attached to this console (real TTY, live output, prompts and
+# browser sign-in work) and returns its exit code. Waits for that process only,
+# not its descendants, so a browser opened during sign-in does not block setup
+# (Start-Process -Wait would wait for the whole process tree).
+function Invoke-Attached([string]$FilePath, [string[]]$Arguments = @()) {
+    $cmd = Get-Command $FilePath -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cmd) { Write-CcFail "$FilePath not found"; return 127 }
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $cmd.Source
+    $psi.Arguments = ConvertTo-ArgumentString $Arguments
+    $psi.UseShellExecute = $false
+    try {
+        $p = [System.Diagnostics.Process]::Start($psi)
+        $p.WaitForExit()
+        return $p.ExitCode
+    } catch { Write-CcFail "$FilePath failed: $($_.Exception.Message)"; return 1 }
 }
 
 Export-ModuleMember -Function *

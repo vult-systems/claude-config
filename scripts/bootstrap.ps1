@@ -39,14 +39,14 @@ Write-CcInfo "Repository:  $repo"
 Write-CcInfo "Claude home: $claudeHome"
 
 Write-CcStep 'Checking tools'
-$missing = Test-Tools
-if ($missing -gt 0 -and -not $SkipToolCheck) {
-    Write-CcFail "$missing required tool(s) missing. Install them, open a new terminal, and rerun. (-SkipToolCheck installs the configuration anyway.)"
+$tools = Test-Tools
+if ($tools.Missing -gt 0 -and -not $SkipToolCheck) {
+    Write-CcFail "$($tools.Missing) required tool(s) missing. Run setup.ps1 to install them, or install them, open a new terminal, and rerun. (-SkipToolCheck installs the configuration anyway.)"
     exit 1
 }
 
 Write-CcStep 'Checking sign-in'
-[void](Test-Auth)
+$warnings = $tools.Warnings + (Test-Auth)
 
 Write-CcStep 'Installing configuration'
 $result = Invoke-ClaudeConfigInstall -RepoRoot $repo -ClaudeHome $claudeHome -Force:$Force -DryRun:$DryRun
@@ -54,11 +54,12 @@ Write-InstallResult $result ([bool]$DryRun)
 if ($DryRun) { exit 0 }
 
 Write-CcStep 'Validating'
-& (Join-Path $PSScriptRoot 'validate.ps1') -SkipTools
+& (Join-Path $PSScriptRoot 'validate.ps1') -SkipTools -Strict
 $validateCode = $LASTEXITCODE
 
 Write-Host ''
-if ($result.Conflicts.Count -gt 0 -or $validateCode -ne 0) {
+if ($validateCode -eq 1) { Write-CcFail 'Validation failed; see above.'; exit 1 }
+if ($result.Conflicts.Count -gt 0 -or $validateCode -ne 0 -or $warnings -gt 0) {
     Write-CcWarn 'Finished with warnings; see above.'
     exit 2
 }

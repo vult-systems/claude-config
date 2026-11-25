@@ -13,18 +13,23 @@
     Workstation checks: required tools and Claude Code version, sign-in state,
     installed files match the repo, and settings.json holds the shared values.
 
-    Exit code 0 = no failures (warnings allowed), 1 = failures.
+    Exit code 0 = no failures (warnings allowed), 1 = failures,
+    2 = warnings when -Strict is given.
 
 .PARAMETER RepoOnly
     Check the repository content only (used by CI).
 
 .PARAMETER SkipTools
-    Skip the tool and sign-in checks (bootstrap.ps1 has just run them).
+    Skip the tool and sign-in checks (setup.ps1 or bootstrap.ps1 has just run them).
+
+.PARAMETER Strict
+    Exit with code 2 when there are warnings but no failures.
 #>
 [CmdletBinding()]
 param(
     [switch]$RepoOnly,
-    [switch]$SkipTools
+    [switch]$SkipTools,
+    [switch]$Strict
 )
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'ClaudeConfig.psm1') -Force
@@ -173,8 +178,9 @@ if (-not $RepoOnly) {
     $claudeHome = Get-ClaudeHome
     if (-not $SkipTools) {
         Write-CcStep 'Tools'
-        $missing = Test-Tools
-        if ($missing -gt 0) { $script:failures += $missing }
+        $tools = Test-Tools
+        $script:failures += $tools.Missing
+        $script:warnings += $tools.Warnings
         Write-CcStep 'Sign-in'
         $script:warnings += Test-Auth
     }
@@ -212,5 +218,10 @@ if (-not $RepoOnly) {
 
 Write-Host ''
 if ($script:failures -gt 0) { Write-CcFail "$($script:failures) failure(s), $($script:warnings) warning(s)"; exit 1 }
-Write-CcOk "Validation passed ($($script:warnings) warning(s))"
+if ($script:warnings -gt 0) {
+    Write-CcWarn "Validation passed with $($script:warnings) warning(s)"
+    if ($Strict) { exit 2 }
+    exit 0
+}
+Write-CcOk 'Validation passed (0 warnings)'
 exit 0
