@@ -4,8 +4,15 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+### Added
+
+- `setup.cmd` / `scripts/setup.ps1`: one-step, rerunnable workstation setup. Each step checks first and does only what's missing: it installs Git, GitHub CLI and native Claude Code per user without admin rights (asking first), keeps `PATH` up to date for the user and the running session, signs in to GitHub and Claude and sets the git identity only when needed, then installs the configuration and validates. It runs from Command Prompt, Windows Terminal or PowerShell on Windows PowerShell 5.1 or PowerShell 7. (#6)
+- A copy-and-paste command in the README for a fresh workstation without Git or GitHub CLI. (#6)
+- Detection of Claude Code installed with WinGet or npm alongside the native install. `validate.ps1` warns about it, and `setup` removes it only after you confirm. (#6)
+
 ### Fixed
 
+- Install and validate failed with "The term 'Get-FileHash' is not recognized" when Windows PowerShell 5.1 was started from a PowerShell 7 session, because 5.1 inherited PowerShell 7's `PSModulePath`. Files are now hashed with .NET directly, and `setup.cmd` clears the inherited path. (#6)
 - `validate.ps1` now counts every warning it prints. The tool check printed warnings that were left out of the summary, so it could say "0 warning(s)" under visible warnings. A missing PowerShell 7 or winget is now information, since both are optional. `validate.ps1 -Strict` exits 2 on warnings, and `bootstrap.ps1` uses it, so it no longer reports "Done" after warnings. (#5)
 
 ## v1.0.0-rc.1
