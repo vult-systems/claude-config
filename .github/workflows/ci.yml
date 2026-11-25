@@ -1,0 +1,30 @@
+# Validate repository content and run the install/merge/restore regression
+# tests on both PowerShell editions a workstation may have.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate repository (Windows PowerShell 5.1)
+        shell: powershell
+        run: .\scripts\validate.ps1 -RepoOnly
+      - name: Tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: .\tests\Run-Tests.ps1
+      - name: Tests (PowerShell 7)
+        shell: pwsh
+        run: .\tests\Run-Tests.ps1
