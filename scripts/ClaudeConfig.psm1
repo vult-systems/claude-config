@@ -182,7 +182,9 @@ function Test-InArray($Item, $Array) {
 # Objects merge per key; keys outside the repo are kept. Arrays are unioned,
 # and items removed from the repo since $Base are removed locally. A scalar
 # takes the repo value unless it was changed locally, in which case the local
-# value is kept and a note is added.
+# value is kept and a note is added. A key removed from the repo since $Base
+# and still at its base value locally is removed, except a top-level scalar
+# (a preference such as model or theme), which keeps its local value.
 function Merge-Settings {
     param($Local, $Repo, $Base, [string]$Path, $Notes)
 
@@ -207,7 +209,17 @@ function Merge-Settings {
         if ($null -ne $baseDict) {
             foreach ($k in @($baseDict.Keys)) {
                 if (-not $Repo.Contains($k) -and $result.Contains($k) -and (Test-JsonEqual $result[$k] $baseDict[$k])) {
-                    $result.Remove($k)
+                    $bv = $baseDict[$k]
+                    if ($Path -eq 'settings' -and -not (($bv -is [System.Collections.IDictionary]) -or (Test-IsArray $bv))) {
+                        # A top-level scalar the repo stops sharing is a
+                        # preference (model, theme, ...): release it and keep
+                        # the local value.
+                        $Notes.Add("$Path.$k is no longer shared; kept your value $(ConvertTo-Json -InputObject $bv -Compress)")
+                    } else {
+                        # Lists, objects and nested values (e.g. under
+                        # permissions) are policy: retire them.
+                        $result.Remove($k)
+                    }
                 }
             }
         }

@@ -55,6 +55,15 @@ function Invoke-WithEnv([hashtable]$Vars, [scriptblock]$Block) {
         foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
     }
 }
+# Adds shared preferences to a sandbox repo, as v1.0.0-rc.1 shipped them, so
+# merge behaviour is tested independently of the current repo settings.
+function Add-RepoPreferences($Sb) {
+    $rs = Read-JsonFile (RepoFile $Sb 'settings.json')
+    $rs['model'] = 'opus'; $rs['theme'] = 'dark-daltonized'; $rs['tui'] = 'fullscreen'
+    $rs['statusLine'] = [ordered]@{ type = 'command'; command = 'echo shared' }
+    $rs['permissions']['disableBypassPermissionsMode'] = 'disable'
+    Write-JsonFile (RepoFile $Sb 'settings.json') $rs
+}
 function HomeFile($Sb, [string]$Rel) { return (Join-Path $Sb.Home (ConvertTo-NativeRel $Rel)) }
 function RepoFile($Sb, [string]$Rel) { return (Join-Path (Join-Path $Sb.Repo 'claude') (ConvertTo-NativeRel $Rel)) }
 
@@ -87,6 +96,7 @@ try {
 
     Write-Host '== existing configuration is preserved'
     $sb = New-Sandbox 'existing'
+    Add-RepoPreferences $sb
     New-Item -ItemType Directory -Path $sb.Home | Out-Null
     Write-TextFile (HomeFile $sb 'CLAUDE.md') "# My notes`r`nKeep this line.`r`n"
     Write-JsonFile (HomeFile $sb 'settings.json') ([ordered]@{
@@ -132,11 +142,14 @@ try {
 
     Write-Host '== settings updates propagate unless changed locally'
     $sb = New-Sandbox 'settings'
+    Add-RepoPreferences $sb
     [void](Install $sb)
     $rs = Read-JsonFile (RepoFile $sb 'settings.json')
     $rs['model'] = 'sonnet'
     $rs['permissions']['deny'] = @($rs['permissions']['deny'] | Where-Object { $_ -ne 'Read(**/*.pem)' })
     $rs.Remove('tui')
+    $rs.Remove('statusLine')
+    $rs['permissions'].Remove('disableBypassPermissionsMode')
     Write-JsonFile (RepoFile $sb 'settings.json') $rs
     $local = Read-JsonFile (HomeFile $sb 'settings.json')
     $local['theme'] = 'light'
@@ -146,7 +159,31 @@ try {
     Check 'unchanged scalar updated' ($s['model'] -eq 'sonnet')
     Check 'locally changed scalar kept' ($s['theme'] -eq 'light')
     Check 'removed array item removed' (@($s['permissions']['deny']) -notcontains 'Read(**/*.pem)')
-    Check 'removed key removed' (-not $s.Contains('tui'))
+    Check 'removed object key removed' (-not $s.Contains('statusLine'))
+    Check 'removed scalar released, value kept' ($s['tui'] -eq 'fullscreen')
+    Check 'released scalar reported' (@($r.Notes | Where-Object { $_ -match 'settings\.tui is no longer shared' }).Count -eq 1)
+    Check 'removed nested policy scalar retired' (-not $s['permissions'].Contains('disableBypassPermissionsMode'))
+
+    Write-Host '== rc.1 preferences survive the move to security-only settings (#8)'
+    $sb = New-Sandbox 'prefs'
+    Add-RepoPreferences $sb
+    [void](Install $sb)
+    $local = Read-JsonFile (HomeFile $sb 'settings.json')
+    $local['theme'] = 'light'
+    Write-JsonFile (HomeFile $sb 'settings.json') $local
+    Copy-Item -LiteralPath (Join-Path (Join-Path $repoRoot 'claude') 'settings.json') -Destination (RepoFile $sb 'settings.json') -Force
+    $r = Install $sb
+    $s = Read-JsonFile (HomeFile $sb 'settings.json')
+    Check 'unchanged model kept' ($s['model'] -eq 'opus')
+    Check 'unchanged tui kept' ($s['tui'] -eq 'fullscreen')
+    Check 'locally changed theme kept' ($s['theme'] -eq 'light')
+    Check 'security deny list still applied' (@($s['permissions']['deny']).Count -eq 4)
+    $r = Install $sb
+    Check 'second run quiet' ($r.Changes.Count -eq 0 -and $r.Notes.Count -eq 0)
+    $fresh = New-Sandbox 'prefs-fresh'
+    [void](Install $fresh)
+    $s = Read-JsonFile (HomeFile $fresh 'settings.json')
+    Check 'fresh install gets Claude Code defaults' (-not ($s.Contains('model') -or $s.Contains('theme') -or $s.Contains('tui')))
 
     Write-Host '== removed skill is uninstalled'
     $sb = New-Sandbox 'removed'
@@ -237,6 +274,18 @@ try {
     Check 'validate fails on a built-in name' ($LASTEXITCODE -eq 1)
     Check 'failure names the conflict' ($out -match 'skills/ship: conflicts with a built-in')
     Remove-Item -LiteralPath $shipDir -Recurse -Force
+
+    Write-Host '== validate rejects personal email addresses (#8)'
+    $mailFile = Join-Path $vr 'docs-note.md'
+    Write-TextFile $mailFile ("Contact jane.doe" + "@acme-corp.net for access.`n")
+    $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
+    Check 'validate fails on a personal email' ($LASTEXITCODE -eq 1 -and $out -match 'docs-note.md: contains an email address')
+    Check 'the address is masked in the output' ($out -notmatch 'jane\.doe')
+    Write-TextFile $mailFile ("Commits: 1+someone" + "@users.noreply.github.com, tests: a" + "@example.com, b" + "@docs.example.org`n" +
+        "SSH: git" + "@github.com:owner/repo.git, placeholder: c" + "@contoso.test, d" + "@host.invalid, asset: icon" + "@2x.png`n")
+    & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly | Out-Null
+    Check 'noreply, example, reserved, SSH and asset names are allowed' ($LASTEXITCODE -eq 0)
+    Remove-Item -LiteralPath $mailFile
 
     Write-Host '== validate counts every warning it prints (#5)'
     # Fake tools on a controlled PATH: claude is older than the tested version,
@@ -385,6 +434,73 @@ try {
         Check '-NoInstall reports PATH instead of changing it' ((-not (Test-Path $sxKey)) -and $out -match 'is not on your user PATH')
     } finally {
         Remove-Item -LiteralPath (Split-Path -Parent $sxKey) -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host '== install.ps1 end to end (#8)'
+    # Clones a throwaway git repo built from this working tree with real git;
+    # the other tools are the signed-in fakes, minus the fake git.
+    $src = Join-Path $work 'install-src'
+    Copy-Item -LiteralPath $vr -Destination $src -Recurse
+    # Prefer Git's cmd launcher; its internal binaries need sibling folders on PATH.
+    $gits = @(Get-Command git -All -CommandType Application)
+    $realGit = @($gits | Where-Object { $_.Source -like '*\cmd\git.exe' } | Select-Object -First 1)
+    if ($realGit.Count -eq 0) { $realGit = @($gits | Select-Object -First 1) }
+    $realGit = $realGit[0].Source
+    foreach ($a in @(@('init', '-q'), @('add', '-A'), @('-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-q', '-m', 'snapshot'))) {
+        [void](Invoke-Exe -FilePath $realGit -Arguments (@('-C', $src) + $a))
+    }
+    $noGit = Join-Path $work 'fake-nogit'
+    [void](New-FakeTools $noGit)
+    Remove-Item -LiteralPath (Join-Path $noGit 'git.cmd')
+    $ix = Join-Path $work 'install'
+    $ixProfile = Join-Path $ix 'profile'
+    New-Item -ItemType Directory -Path (Join-Path $ixProfile '.local\bin') -Force | Out-Null
+    Write-TextFile (Join-Path $ixProfile '.local\bin\claude.exe') 'placeholder'
+    $ixClone = Join-Path $ix 'repos\claude-config'
+    $ixKey = "HKCU:\Software\claude-config-tests\$([guid]::NewGuid().ToString('N'))"
+    $ixEnv = @{ Path = "$noGit;$(Split-Path -Parent $realGit);$(Join-Path $env:SystemRoot 'System32')"; CLAUDE_CONFIG_DIR = (Join-Path $ix 'claude-home'); USERPROFILE = $ixProfile; LOCALAPPDATA = (Join-Path $work 'empty'); APPDATA = (Join-Path $work 'empty') }
+    $runInstall = {
+        param([string]$Target, [string[]]$Extra)
+        $argList = @('-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', (Join-Path $src 'install.ps1'), '-Path', $Target, '-Repository', $src, '-NonInteractive') + $Extra
+        # git writes progress to stderr; under 5.1 with Stop, 2>&1 would throw on it.
+        $ErrorActionPreference = 'Continue'
+        Invoke-WithEnv $ixEnv { & $ps @argList 2>&1 | Out-String }
+    }
+    try {
+        $out = & $runInstall $ixClone @('-DryRun')
+        Check 'install dry run exits 0 and clones nothing' ($LASTEXITCODE -eq 0 -and -not (Test-Path $ixClone) -and $out -match '\(dry run\) would run: git clone')
+
+        $out = & $runInstall $ixClone @('-SkipAuth', '-PathRegistryKey', $ixKey)
+        $ixCode = $LASTEXITCODE
+        Check "install exits with setup's code ($okCode)" ($ixCode -eq $okCode)
+        Check 'install cloned the repo' (Test-Path (Join-Path $ixClone '.git'))
+        Check 'install ran setup with passed-through arguments' ($out -match 'Sign-in \(skipped\)' -and $out -match 'Setup (complete|finished)')
+        Check 'install left configuration installed' (Test-Path (Join-Path $ix 'claude-home\skills\vult-ship\SKILL.md'))
+
+        $out = & $runInstall $ixClone @('-SkipAuth', '-PathRegistryKey', $ixKey)
+        Check 'install rerun reuses the clone' ($LASTEXITCODE -eq $okCode -and $out -match 'Using the existing clone' -and $out -notmatch '==> Cloning')
+
+        $other = Join-Path $ix 'occupied'
+        New-Item -ItemType Directory -Path $other | Out-Null
+        Write-TextFile (Join-Path $other 'keep.txt') 'mine'
+        $out = & $runInstall $other @()
+        Check 'install refuses a non-empty folder' ($LASTEXITCODE -eq 1 -and $out -match 'is not a claude-config clone' -and (Test-Path (Join-Path $other 'keep.txt')))
+
+        $partial = Join-Path $ix 'partial'
+        New-Item -ItemType Directory -Path (Join-Path $partial '.git') -Force | Out-Null
+        $out = & $runInstall $partial @()
+        Check 'install reports an unreadable clone with git''s reason' ($LASTEXITCODE -eq 1 -and $out -match 'git cannot read the clone')
+
+        $foreign = Join-Path $ix 'foreign'
+        [void](Invoke-Exe -FilePath $realGit -Arguments @('clone', '-q', $src, $foreign))
+        [void](Invoke-Exe -FilePath $realGit -Arguments @('-C', $foreign, 'remote', 'set-url', 'origin', 'https://example.com/someone-else/repo.git'))
+        $out = & $runInstall $foreign @()
+        Check 'install refuses a clone of another repository' ($LASTEXITCODE -eq 1 -and $out -match 'is a clone of' -and $out -notmatch 'Running ')
+
+        $out = & $runInstall $ixClone @('-NoInstall', '-SkipAuth', '-PathRegistryKey', $ixKey)
+        Check 'install passes -NoInstall on to setup' ($out -match 'setup.cmd.*-NoInstall')
+    } finally {
+        Remove-Item -LiteralPath (Split-Path -Parent $ixKey) -Recurse -Force -ErrorAction SilentlyContinue
     }
 } catch {
     $script:failed++

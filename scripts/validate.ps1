@@ -8,7 +8,8 @@
       - agents have a name and description
       - JSON parses; PowerShell scripts parse and are ASCII-only
       - shared settings grant no permissions and hold no credentials
-      - no credentials, tokens, private keys, history files or user-specific paths
+      - no credentials, tokens, private keys, history files, user-specific paths
+        or personal email addresses
 
     Workstation checks: required tools and Claude Code version, sign-in state,
     installed files match the repo, and settings.json holds the shared values.
@@ -144,6 +145,12 @@ $secretPatterns = @(
     '"(accessToken|refreshToken|oauthAccount)"\s*:'
 )
 $pathPatterns = @('[A-Za-z]:\\Users\\', '/Users/[A-Za-z]', '/home/[A-Za-z]')
+# Personal email addresses must not be published; noreply and example
+# addresses (commit attribution, tests, docs) are fine.
+$emailPattern = '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
+# Allowed: noreply attribution, SSH remotes (git@host), RFC 2606 example and
+# reserved names, and asset names like icon@2x.png.
+$emailAllowed = '(?i)(@users\.noreply\.github\.com|^noreply@github\.com|^noreply@anthropic\.com|^git@.*|@([a-z0-9-]+\.)*example\.(com|org|net)|\.(example|invalid|test|localhost)|\.(png|jpe?g|gif|svg|webp|ico|bmp))$'
 $forbiddenNames = '^(\.credentials\.json|settings\.local\.json|\.claude\.json|claude-config\.state\.json|\.env(\..*)?|.*\.jsonl|.*\.pem)$'
 $user = $env:USERNAME
 if (-not $user) { $user = $env:USER }
@@ -158,6 +165,12 @@ foreach ($f in $files) {
     $text = [Text.Encoding]::UTF8.GetString($bytes)
     foreach ($p in $secretPatterns) { if ($text -match $p) { Fail "${rel}: matches secret pattern $p" } }
     foreach ($p in $pathPatterns) { if ($text -cmatch $p) { Fail "${rel}: contains a user-specific path ($p)" } }
+    foreach ($m in [regex]::Matches($text, $emailPattern)) {
+        if ($m.Value -notmatch $emailAllowed) {
+            # Masked, so the address itself never lands in CI logs.
+            Fail "${rel}: contains an email address ($($m.Value.Substring(0, 1))***@...); use a users.noreply.github.com or example.com address"
+        }
+    }
     if ($user -and $user.Length -ge 3 -and $text -match ('(?i)\b' + [regex]::Escape($user) + '\b')) {
         Fail "${rel}: contains the current username"
     }

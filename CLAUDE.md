@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-claude-config holds the shared Claude Code user configuration for all of my Windows workstations: global standards, skills, agents and settings, plus the PowerShell scripts that install and sync them. It is itself a production project, so the global standards apply.
+claude-config holds shared Claude Code user configuration for Windows workstations (global standards, skills, agents and security settings) plus the PowerShell scripts that install and sync them. It's public (MIT) and meant to be used as is or forked by teams. It is itself a production project, so the global standards apply.
 
 ## Commands
 
@@ -17,6 +17,7 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 ## Layout
 
 - `claude/` mirrors the Claude Code user directory: `CLAUDE.md` (installed as a managed block), `settings.json` (3-way merged), `skills/`, `agents/`.
+- `install.ps1` at the root is the self-contained fresh-workstation entry point: users download and read it, and it gets Git, clones, and runs `setup.cmd`. Keep it short, readable and free of module dependencies.
 - `scripts/ClaudeConfig.psm1` has the shared logic; `setup.ps1` (onboarding flow), `bootstrap.ps1` (configuration only), `sync.ps1`, `validate.ps1` and `restore.ps1` are entry points. `setup.cmd` at the root launches `setup.ps1` with Windows PowerShell 5.1 from any shell.
 
 ## Design decisions to preserve
@@ -28,6 +29,8 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 - **Preserve local configuration.** Text outside the `CLAUDE.md` managed block, settings keys outside the repo, and locally changed values are kept. Everything replaced is backed up first.
 - **Windows PowerShell 5.1 compatible.** A fresh machine has no pwsh. Keep scripts ASCII-only and write UTF-8 without a BOM. Avoid PS 7-only syntax (`??`, ternaries, `-AsHashtable`, `Join-Path` with more than one child path). Avoid cmdlets that 5.1 loads from script modules (e.g. `Get-FileHash`): 5.1 started from a pwsh session inherits pwsh's `PSModulePath` and can't load them.
 - **Shared settings grant nothing.** No `permissions.allow`, permissive `defaultMode`, credentials or machine paths. `validate.ps1` enforces this.
+- **Shared settings are safeguards only.** Model, theme, layout and other preferences stay personal. When a top-level scalar key leaves the repo, the merge keeps each workstation's value instead of resetting it. Removed lists, objects and nested values (policy, e.g. under `permissions`) are retired if unchanged locally.
+- **Public by design.** No personal data, usernames, machine paths or personal email addresses in content (`validate.ps1` checks). Git history is never rewritten: commits before the switch to public carry the account's commit email, kept by owner decision (#8); later commits use a GitHub noreply address. Org-specific values are limited to the repository URL and the `/vult-ship` name, which forks change (README "Using it for a team").
 - **Global vs project.** `claude/CLAUDE.md` holds standards that apply to every project. Project specifics belong in each repo's own `CLAUDE.md`, which is never managed from here.
 
 ## Changes

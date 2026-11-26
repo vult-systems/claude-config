@@ -7,8 +7,15 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 ### Added
 
 - `setup.cmd` / `scripts/setup.ps1`: one-step, rerunnable workstation setup. Each step checks first and does only what's missing: it installs Git, GitHub CLI and native Claude Code per user without admin rights (asking first), keeps `PATH` up to date for the user and the running session, signs in to GitHub and Claude and sets the git identity only when needed, then installs the configuration and validates. It runs from Command Prompt, Windows Terminal or PowerShell on Windows PowerShell 5.1 or PowerShell 7. (#6)
-- A copy-and-paste command in the README for a fresh workstation without Git or GitHub CLI. (#6)
+- `install.ps1`: a fresh-workstation installer to download, read, then run from Windows PowerShell or Command Prompt. It installs Git for the user if missing, clones (or reuses a clone), and runs `setup.cmd`. It never overwrites a folder and is safe to rerun. (#8)
 - Detection of Claude Code installed with WinGet or npm alongside the native install. `validate.ps1` warns about it, and `setup` removes it only after you confirm. (#6)
+- `validate.ps1` rejects personal email addresses in repository content (noreply and `example.com` addresses are allowed), and masks the address in its output. (#8)
+- MIT `LICENSE`, `CONTRIBUTING.md` and `SECURITY.md`. The README explains how a team forks and customizes the repository, including renaming `/vult-ship`. (#8)
+
+### Changed
+
+- New-workstation setup is now download, review, run with `install.ps1` from Windows PowerShell or Command Prompt, replacing the manual install, sign-in, clone and bootstrap steps. (#6, #8)
+- Shared settings now hold only the security safeguards (the `.env`/`*.pem`/`~/.ssh` deny list). `model`, `theme` and `tui` are no longer shared, so new installs use Claude Code's defaults. Workstations that already have them keep their current values: when the repo stops sharing a preference, sync keeps your value instead of resetting it. (#8)
 
 ### Fixed
 
