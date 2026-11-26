@@ -431,6 +431,64 @@ try {
     } finally {
         Remove-Item -LiteralPath (Split-Path -Parent $sxKey) -Recurse -Force -ErrorAction SilentlyContinue
     }
+
+    Write-Host '== install.ps1 end to end (#8)'
+    # Clones a throwaway git repo built from this working tree with real git;
+    # the other tools are the signed-in fakes, minus the fake git.
+    $src = Join-Path $work 'install-src'
+    Copy-Item -LiteralPath $vr -Destination $src -Recurse
+    # Prefer Git's cmd launcher; its internal binaries need sibling folders on PATH.
+    $gits = @(Get-Command git -All -CommandType Application)
+    $realGit = @($gits | Where-Object { $_.Source -like '*\cmd\git.exe' } | Select-Object -First 1)
+    if ($realGit.Count -eq 0) { $realGit = @($gits | Select-Object -First 1) }
+    $realGit = $realGit[0].Source
+    foreach ($a in @(@('init', '-q'), @('add', '-A'), @('-c', 'user.name=test', '-c', 'user.email=test@example.com', 'commit', '-q', '-m', 'snapshot'))) {
+        [void](Invoke-Exe -FilePath $realGit -Arguments (@('-C', $src) + $a))
+    }
+    $noGit = Join-Path $work 'fake-nogit'
+    [void](New-FakeTools $noGit)
+    Remove-Item -LiteralPath (Join-Path $noGit 'git.cmd')
+    $ix = Join-Path $work 'install'
+    $ixProfile = Join-Path $ix 'profile'
+    New-Item -ItemType Directory -Path (Join-Path $ixProfile '.local\bin') -Force | Out-Null
+    Write-TextFile (Join-Path $ixProfile '.local\bin\claude.exe') 'placeholder'
+    $ixClone = Join-Path $ix 'repos\claude-config'
+    $ixKey = "HKCU:\Software\claude-config-tests\$([guid]::NewGuid().ToString('N'))"
+    $ixEnv = @{ Path = "$noGit;$(Split-Path -Parent $realGit);$(Join-Path $env:SystemRoot 'System32')"; CLAUDE_CONFIG_DIR = (Join-Path $ix 'claude-home'); USERPROFILE = $ixProfile; LOCALAPPDATA = (Join-Path $work 'empty'); APPDATA = (Join-Path $work 'empty') }
+    $runInstall = {
+        param([string]$Target, [string[]]$Extra)
+        $argList = @('-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', (Join-Path $src 'install.ps1'), '-Path', $Target, '-Repository', $src, '-NonInteractive') + $Extra
+        # git writes progress to stderr; under 5.1 with Stop, 2>&1 would throw on it.
+        $ErrorActionPreference = 'Continue'
+        Invoke-WithEnv $ixEnv { & $ps @argList 2>&1 | Out-String }
+    }
+    try {
+        $out = & $runInstall $ixClone @('-DryRun')
+        Check 'install dry run exits 0 and clones nothing' ($LASTEXITCODE -eq 0 -and -not (Test-Path $ixClone) -and $out -match '\(dry run\) would run: git clone')
+
+        $out = & $runInstall $ixClone @('-SkipAuth', '-PathRegistryKey', $ixKey)
+        $ixCode = $LASTEXITCODE
+        Check "install exits with setup's code ($okCode)" ($ixCode -eq $okCode)
+        Check 'install cloned the repo' (Test-Path (Join-Path $ixClone '.git'))
+        Check 'install ran setup with passed-through arguments' ($out -match 'Sign-in \(skipped\)' -and $out -match 'Setup (complete|finished)')
+        Check 'install left configuration installed' (Test-Path (Join-Path $ix 'claude-home\skills\vult-ship\SKILL.md'))
+
+        $out = & $runInstall $ixClone @('-SkipAuth', '-PathRegistryKey', $ixKey)
+        Check 'install rerun reuses the clone' ($LASTEXITCODE -eq $okCode -and $out -match 'Using the existing clone' -and $out -notmatch '==> Cloning')
+
+        $other = Join-Path $ix 'occupied'
+        New-Item -ItemType Directory -Path $other | Out-Null
+        Write-TextFile (Join-Path $other 'keep.txt') 'mine'
+        $out = & $runInstall $other @()
+        Check 'install refuses a non-empty folder' ($LASTEXITCODE -eq 1 -and $out -match 'is not a claude-config clone' -and (Test-Path (Join-Path $other 'keep.txt')))
+
+        $partial = Join-Path $ix 'partial'
+        New-Item -ItemType Directory -Path (Join-Path $partial '.git') -Force | Out-Null
+        $out = & $runInstall $partial @()
+        Check 'install reports an incomplete clone' ($LASTEXITCODE -eq 1 -and $out -match 'incomplete clone')
+    } finally {
+        Remove-Item -LiteralPath (Split-Path -Parent $ixKey) -Recurse -Force -ErrorAction SilentlyContinue
+    }
 } catch {
     $script:failed++
     Write-Host "  [FAIL] unexpected error: $($_.Exception.Message)`n$($_.ScriptStackTrace)" -ForegroundColor Red
