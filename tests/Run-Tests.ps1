@@ -272,6 +272,17 @@ try {
     Check 'failure names the conflict' ($out -match 'skills/ship: conflicts with a built-in')
     Remove-Item -LiteralPath $shipDir -Recurse -Force
 
+    Write-Host '== validate rejects personal email addresses (#8)'
+    $mailFile = Join-Path $vr 'docs-note.md'
+    Write-TextFile $mailFile ("Contact jane.doe" + "@corp-mail.test for access.`n")
+    $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
+    Check 'validate fails on a personal email' ($LASTEXITCODE -eq 1 -and $out -match 'docs-note.md: contains an email address')
+    Check 'the address is masked in the output' ($out -notmatch 'jane\.doe')
+    Write-TextFile $mailFile ("Commits: 1+someone" + "@users.noreply.github.com, tests: a" + "@example.com`n")
+    & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly | Out-Null
+    Check 'noreply and example addresses are allowed' ($LASTEXITCODE -eq 0)
+    Remove-Item -LiteralPath $mailFile
+
     Write-Host '== validate counts every warning it prints (#5)'
     # Fake tools on a controlled PATH: claude is older than the tested version,
     # pwsh and winget are absent (optional, so information only).
