@@ -61,6 +61,7 @@ function Add-RepoPreferences($Sb) {
     $rs = Read-JsonFile (RepoFile $Sb 'settings.json')
     $rs['model'] = 'opus'; $rs['theme'] = 'dark-daltonized'; $rs['tui'] = 'fullscreen'
     $rs['statusLine'] = [ordered]@{ type = 'command'; command = 'echo shared' }
+    $rs['permissions']['disableBypassPermissionsMode'] = 'disable'
     Write-JsonFile (RepoFile $Sb 'settings.json') $rs
 }
 function HomeFile($Sb, [string]$Rel) { return (Join-Path $Sb.Home (ConvertTo-NativeRel $Rel)) }
@@ -148,6 +149,7 @@ try {
     $rs['permissions']['deny'] = @($rs['permissions']['deny'] | Where-Object { $_ -ne 'Read(**/*.pem)' })
     $rs.Remove('tui')
     $rs.Remove('statusLine')
+    $rs['permissions'].Remove('disableBypassPermissionsMode')
     Write-JsonFile (RepoFile $sb 'settings.json') $rs
     $local = Read-JsonFile (HomeFile $sb 'settings.json')
     $local['theme'] = 'light'
@@ -160,6 +162,7 @@ try {
     Check 'removed object key removed' (-not $s.Contains('statusLine'))
     Check 'removed scalar released, value kept' ($s['tui'] -eq 'fullscreen')
     Check 'released scalar reported' (@($r.Notes | Where-Object { $_ -match 'settings\.tui is no longer shared' }).Count -eq 1)
+    Check 'removed nested policy scalar retired' (-not $s['permissions'].Contains('disableBypassPermissionsMode'))
 
     Write-Host '== rc.1 preferences survive the move to security-only settings (#8)'
     $sb = New-Sandbox 'prefs'
@@ -274,13 +277,14 @@ try {
 
     Write-Host '== validate rejects personal email addresses (#8)'
     $mailFile = Join-Path $vr 'docs-note.md'
-    Write-TextFile $mailFile ("Contact jane.doe" + "@corp-mail.test for access.`n")
+    Write-TextFile $mailFile ("Contact jane.doe" + "@acme-corp.net for access.`n")
     $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
     Check 'validate fails on a personal email' ($LASTEXITCODE -eq 1 -and $out -match 'docs-note.md: contains an email address')
     Check 'the address is masked in the output' ($out -notmatch 'jane\.doe')
-    Write-TextFile $mailFile ("Commits: 1+someone" + "@users.noreply.github.com, tests: a" + "@example.com`n")
+    Write-TextFile $mailFile ("Commits: 1+someone" + "@users.noreply.github.com, tests: a" + "@example.com, b" + "@docs.example.org`n" +
+        "SSH: git" + "@github.com:owner/repo.git, placeholder: c" + "@contoso.test, d" + "@host.invalid, asset: icon" + "@2x.png`n")
     & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly | Out-Null
-    Check 'noreply and example addresses are allowed' ($LASTEXITCODE -eq 0)
+    Check 'noreply, example, reserved, SSH and asset names are allowed' ($LASTEXITCODE -eq 0)
     Remove-Item -LiteralPath $mailFile
 
     Write-Host '== validate counts every warning it prints (#5)'
@@ -485,7 +489,16 @@ try {
         $partial = Join-Path $ix 'partial'
         New-Item -ItemType Directory -Path (Join-Path $partial '.git') -Force | Out-Null
         $out = & $runInstall $partial @()
-        Check 'install reports an incomplete clone' ($LASTEXITCODE -eq 1 -and $out -match 'incomplete clone')
+        Check 'install reports an unreadable clone with git''s reason' ($LASTEXITCODE -eq 1 -and $out -match 'git cannot read the clone')
+
+        $foreign = Join-Path $ix 'foreign'
+        [void](Invoke-Exe -FilePath $realGit -Arguments @('clone', '-q', $src, $foreign))
+        [void](Invoke-Exe -FilePath $realGit -Arguments @('-C', $foreign, 'remote', 'set-url', 'origin', 'https://example.com/someone-else/repo.git'))
+        $out = & $runInstall $foreign @()
+        Check 'install refuses a clone of another repository' ($LASTEXITCODE -eq 1 -and $out -match 'is a clone of' -and $out -notmatch 'Running ')
+
+        $out = & $runInstall $ixClone @('-NoInstall', '-SkipAuth', '-PathRegistryKey', $ixKey)
+        Check 'install passes -NoInstall on to setup' ($out -match 'setup.cmd.*-NoInstall')
     } finally {
         Remove-Item -LiteralPath (Split-Path -Parent $ixKey) -Recurse -Force -ErrorAction SilentlyContinue
     }

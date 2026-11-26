@@ -148,7 +148,9 @@ $pathPatterns = @('[A-Za-z]:\\Users\\', '/Users/[A-Za-z]', '/home/[A-Za-z]')
 # Personal email addresses must not be published; noreply and example
 # addresses (commit attribution, tests, docs) are fine.
 $emailPattern = '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
-$emailAllowed = '(?i)(@users\.noreply\.github\.com|^noreply@github\.com|^noreply@anthropic\.com|@example\.(com|org|net))$'
+# Allowed: noreply attribution, SSH remotes (git@host), RFC 2606 example and
+# reserved names, and asset names like icon@2x.png.
+$emailAllowed = '(?i)(@users\.noreply\.github\.com|^noreply@github\.com|^noreply@anthropic\.com|^git@.*|@([a-z0-9-]+\.)*example\.(com|org|net)|\.(example|invalid|test|localhost)|\.(png|jpe?g|gif|svg|webp|ico|bmp))$'
 $forbiddenNames = '^(\.credentials\.json|settings\.local\.json|\.claude\.json|claude-config\.state\.json|\.env(\..*)?|.*\.jsonl|.*\.pem)$'
 $user = $env:USERNAME
 if (-not $user) { $user = $env:USER }

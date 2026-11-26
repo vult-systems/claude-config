@@ -9,7 +9,8 @@
       1. Finds Git, or offers to install Git for Windows for this user only
          (winget --scope user, no admin rights).
       2. Clones the repository to -Path (default: <your profile>\repos\claude-config),
-         or reuses an existing clone there. It never deletes or overwrites a folder.
+         or reuses an existing clone of the same repository there, as it is
+         (update it with scripts\sync.ps1). It never deletes or overwrites a folder.
       3. Runs setup.cmd from the clone, which does the rest (tools, PATH,
          sign-in, configuration, validation) and asks before installing or
          removing anything.
@@ -36,6 +37,9 @@
     Change nothing: report what would be installed or cloned, and run setup
     with -DryRun if a clone already exists.
 
+.PARAMETER NoInstall
+    Install no software (not even Git); pass -NoInstall to setup.
+
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy RemoteSigned -File install.ps1
 
@@ -49,10 +53,13 @@ param(
     [switch]$Yes,
     [switch]$NonInteractive,
     [switch]$DryRun,
-    # Anything else (e.g. -SkipAuth, -NoInstall, -Force) is passed to setup.
+    [switch]$NoInstall,
+    # Anything else (e.g. -SkipAuth, -Force) is passed to setup.
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$SetupArguments = @()
 )
 $ErrorActionPreference = 'Stop'
+# Resolve ~ and relative paths once, so PowerShell and git agree on the folder.
+$Path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
 
 function Say([string]$m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Info([string]$m) { Write-Host "  $m" }
@@ -89,6 +96,7 @@ if (Find-Git) {
 } else {
     $cmdLine = 'winget install --id Git.Git -e --source winget --scope user'
     if ($DryRun) { Info "(dry run) would install Git for Windows: $cmdLine"; exit 0 }
+    if ($NoInstall) { Stop-Install "Git is required and -NoInstall was given. Install it ($cmdLine), then run this again." }
     if (-not (Confirm-Step 'Git for Windows is not installed. Install it for this user with winget?')) {
         Stop-Install "Git is required. Install it ($cmdLine), then run this again."
     }
@@ -110,13 +118,21 @@ if (Find-Git) {
 $setupCmd = Join-Path $Path 'setup.cmd'
 if (Test-Path -LiteralPath (Join-Path $Path '.git')) {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    & git -C $Path rev-parse --verify --quiet HEAD *> $null
-    $ok = ($LASTEXITCODE -eq 0)
+    $head = @(& git -C $Path rev-parse --verify HEAD 2>&1 | ForEach-Object { "$_" })
+    $headOk = ($LASTEXITCODE -eq 0)
+    $origin = "$(& git -C $Path remote get-url origin 2>$null)"
     $ErrorActionPreference = $old
-    if (-not $ok -or -not (Test-Path -LiteralPath $setupCmd)) {
-        Stop-Install "$Path holds an incomplete clone (an interrupted download?). Delete that folder and run this again, or pass -Path."
+    if (-not $headOk) {
+        # Show git's reason: it may be an interrupted clone, or e.g. a
+        # safe.directory ownership error on a folder that is fine.
+        Stop-Install "git cannot read the clone at ${Path}: $($head -join ' '). If an earlier download was interrupted, delete that folder and run this again; otherwise fix the error above or pass -Path."
     }
-    Info "Using the existing clone. (To update it later: scripts\sync.ps1)"
+    $norm = { param($u) $u.Trim().TrimEnd('/', '\').ToLowerInvariant() -replace '\.git$', '' }
+    if ((& $norm $origin) -ne (& $norm $Repository)) {
+        Stop-Install "$Path is a clone of '$origin', not '$Repository'. Pass -Path to clone elsewhere, or -Repository to use that clone."
+    }
+    if (-not (Test-Path -LiteralPath $setupCmd)) { Stop-Install "$Path has no setup.cmd; it is not a claude-config clone. Pass -Path." }
+    Info "Using the existing clone as it is (not updated). To update it: scripts\sync.ps1"
 } elseif ((Test-Path -LiteralPath $Path) -and @(Get-ChildItem -LiteralPath $Path -Force).Count -gt 0) {
     Stop-Install "$Path exists and is not a claude-config clone. Choose another folder with -Path."
 } elseif ($DryRun) {
@@ -138,6 +154,7 @@ $pass = @()
 if ($Yes) { $pass += '-Yes' }
 if ($NonInteractive) { $pass += '-NonInteractive' }
 if ($DryRun) { $pass += '-DryRun' }
+if ($NoInstall) { $pass += '-NoInstall' }
 $pass += $SetupArguments
 Say "Running $setupCmd $($pass -join ' ')"
 & $setupCmd @pass

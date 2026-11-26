@@ -183,8 +183,8 @@ function Test-InArray($Item, $Array) {
 # and items removed from the repo since $Base are removed locally. A scalar
 # takes the repo value unless it was changed locally, in which case the local
 # value is kept and a note is added. A key removed from the repo since $Base
-# is removed locally if it is a list or object still at its base value; a
-# removed scalar keeps its local value (preferences are released, not reset).
+# and still at its base value locally is removed, except a top-level scalar
+# (a preference such as model or theme), which keeps its local value.
 function Merge-Settings {
     param($Local, $Repo, $Base, [string]$Path, $Notes)
 
@@ -210,13 +210,15 @@ function Merge-Settings {
             foreach ($k in @($baseDict.Keys)) {
                 if (-not $Repo.Contains($k) -and $result.Contains($k) -and (Test-JsonEqual $result[$k] $baseDict[$k])) {
                     $bv = $baseDict[$k]
-                    if (($bv -is [System.Collections.IDictionary]) -or (Test-IsArray $bv)) {
-                        # Lists and objects are shared policy: retire them.
-                        $result.Remove($k)
-                    } else {
-                        # A scalar the repo stops sharing (a preference such as
-                        # theme or model) is released: the local value is kept.
+                    if ($Path -eq 'settings' -and -not (($bv -is [System.Collections.IDictionary]) -or (Test-IsArray $bv))) {
+                        # A top-level scalar the repo stops sharing is a
+                        # preference (model, theme, ...): release it and keep
+                        # the local value.
                         $Notes.Add("$Path.$k is no longer shared; kept your value $(ConvertTo-Json -InputObject $bv -Compress)")
+                    } else {
+                        # Lists, objects and nested values (e.g. under
+                        # permissions) are policy: retire them.
+                        $result.Remove($k)
                     }
                 }
             }

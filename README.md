@@ -119,7 +119,7 @@ The skills that push, merge, tag or release run only when you type them, and the
 | Claude Code on Windows complains about Git Bash | Install Git for Windows; Claude Code needs it. |
 | `... was modified locally; left unchanged` | Keep it: `sync.ps1 -Capture`, then commit. Discard it: `sync.ps1 -Force` (backed up). |
 | `settings.<key> kept local value ...` | Informational: your local value differs from the repo. Change either side to match, or leave it. |
-| `settings.<key> is no longer shared; kept your value ...` | Informational, shown once: the repo stopped sharing that preference (v1.0.0-rc.2 dropped `model`, `theme` and `tui`). Your value stays; change it with `/config` if you like. |
+| `settings.<key> is no longer shared; kept your value ...` | Informational, shown once: the repo stopped sharing that preference (after v1.0.0-rc.1, `model`, `theme` and `tui` stopped being shared). Your value stays; change it with `/config` if you like. |
 | `settings.json is not valid JSON` | Fix the file (or `restore.ps1 -Latest`), then rerun. Sync never rewrites a file it can't parse. |
 | `Local branch has diverged from upstream` | In the repo, `git status` and `git log --oneline --graph --all -10`, resolve it, then rerun. |
 | Skills don't show up | Start a new session. Run `validate.ps1`. Check `~/.claude/skills/<name>/SKILL.md` exists. |
