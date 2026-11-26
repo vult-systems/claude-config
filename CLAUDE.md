@@ -43,5 +43,6 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 
 ## Current state
 
-- **v1.0.0-rc.1**: validated on one workstation. Before promoting to v1.0.0, it needs a fresh-workstation bootstrap and a two-workstation sync round trip (see the acceptance issue).
-- **Unreleased** (since rc.1): `setup.ps1`/`setup.cmd` onboarding (#6), the validate warning-count fix (#5) and the 5.1-from-pwsh hash fix. They need a fresh-workstation run of the README paste before shipping; v1.0.0 stays pending acceptance (#2), and a new RC should carry these changes.
+- **v1.0.0-rc.2** (tag `v1.0.0-rc.2`, commit `4004607`): public repository, `install.ps1` + `setup.cmd` onboarding, safeguard-only shared settings. The draft pre-release is published by the maintainer. v1.0.0-rc.1 was never tagged.
+- Before promoting to v1.0.0, every item in the acceptance issue (#2) must pass on real workstations, including the public fresh-workstation onboarding and a two-workstation sync round trip.
+- Repository settings: `main` protected (PR required with 0 approvals, `validate` check required, conversations resolved, no force-push or deletion), merged branches auto-deleted. Private vulnerability reporting (referenced by SECURITY.md) still needs enabling.
