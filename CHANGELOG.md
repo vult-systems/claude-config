@@ -4,11 +4,15 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+## v1.0.0-rc.4
+
+The one feature added during the v1.0.0 freeze, by owner decision. The freeze applies again from this release.
+
 ### Added
 
-- Session modes: `/vult-fast` (direct implementation on a local experimental branch, smoke tests, housekeeping deferred), `/vult-dev` (the default) and `/vult-prod` (all production standards). The global `CLAUDE.md` lists the rules that hold in every mode, and `/vult-ship` brings experimental work up to the full standards before it reaches the default branch.
-- Mode-aware planning in the shared standards: fast mode implements directly, development mode plans non-trivial work when needed, production mode plans before every multi-file or non-trivial edit. Personal preferences outside the managed block may adjust this but don't relax the rules that hold in every mode.
-- `validate.ps1` requires mode skills to be user-invoked only (`disable-model-invocation: true`) and every shipped skill to be listed in `claude/CLAUDE.md` and the README skill table.
+- Session modes: `/vult-fast` (direct implementation on a local experimental branch, smoke tests, housekeeping deferred), `/vult-dev` (the default) and `/vult-prod` (all production standards). The global `CLAUDE.md` lists the rules that hold in every mode, and `/vult-ship` brings experimental work up to the full standards before it reaches the default branch. (#16)
+- Mode-aware planning in the shared standards: fast mode implements directly, development mode plans non-trivial work when needed, production mode plans before every multi-file or non-trivial edit. Personal preferences outside the managed block may adjust this but don't relax the rules that hold in every mode. (#16)
+- `validate.ps1` requires mode skills to be user-invoked only (`disable-model-invocation: true`) and every shipped skill to be listed in `claude/CLAUDE.md` and the README skill table. (#16)
 
 ## v1.0.0-rc.3
 
