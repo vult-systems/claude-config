@@ -18,6 +18,7 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 
 - `claude/` mirrors the Claude Code user directory: `CLAUDE.md` (installed as a managed block), `settings.json` (3-way merged), `skills/`, `agents/`.
 - `install.ps1` at the root is the self-contained fresh-workstation entry point: users download and read it, and it gets Git, clones, and runs `setup.cmd`. Keep it short, readable and free of module dependencies.
+- `README.md` is a short landing page (quick setup, everyday commands, modes, skill tables). Details live in `docs/`, one topic per page: installation, configuration, skills, troubleshooting, team-setup.
 - `scripts/ClaudeConfig.psm1` has the shared logic; `setup.ps1` (onboarding flow), `bootstrap.ps1` (configuration only), `sync.ps1`, `validate.ps1` and `restore.ps1` are entry points. `setup.cmd` at the root launches `setup.ps1` with Windows PowerShell 5.1 from any shell.
 
 ## Design decisions to preserve
@@ -30,13 +31,13 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 - **Windows PowerShell 5.1 compatible.** A fresh machine has no pwsh. Keep scripts ASCII-only and write UTF-8 without a BOM. Avoid PS 7-only syntax (`??`, ternaries, `-AsHashtable`, `Join-Path` with more than one child path). Avoid cmdlets that 5.1 loads from script modules (e.g. `Get-FileHash`): 5.1 started from a pwsh session inherits pwsh's `PSModulePath` and can't load them.
 - **Shared settings grant nothing.** No `permissions.allow`, permissive `defaultMode`, credentials or machine paths. `validate.ps1` enforces this.
 - **Shared settings are safeguards only.** Model, theme, layout and other preferences stay personal. When a top-level scalar key leaves the repo, the merge keeps each workstation's value instead of resetting it. Removed lists, objects and nested values (policy, e.g. under `permissions`) are retired if unchanged locally.
-- **Public by design.** No personal data, usernames, machine paths or personal email addresses in content (`validate.ps1` checks). Git history is never rewritten: commits before the switch to public carry the account's commit email, kept by owner decision (#8); later commits use a GitHub noreply address. Org-specific values are limited to the repository URL and the `/vult-ship` name, which forks change (README "Using it for a team").
+- **Public by design.** No personal data, usernames, machine paths or personal email addresses in content (`validate.ps1` checks). Git history is never rewritten: commits before the switch to public carry the account's commit email, kept by owner decision (#8); later commits use a GitHub noreply address. Org-specific values are limited to the repository URL and the `/vult-ship` name, which forks change (`docs/team-setup.md`).
 - **Global vs project.** `claude/CLAUDE.md` holds standards that apply to every project. Project specifics belong in each repo's own `CLAUDE.md`, which is never managed from here.
 
 ## Changes
 
 - Skills stay concise and procedural. A skill that pushes, merges, tags or releases has `disable-model-invocation: true` and confirms before outward-facing steps.
-- Adding or renaming a skill: update `$expectedSkills` in `validate.ps1`, the README table and the list in `claude/CLAUDE.md` (validate checks the last two). Mode skills also go in `$modeSkills` and must keep `disable-model-invocation: true`. Names must not match a built-in Claude Code command or alias (`$reservedNames` in `validate.ps1`); prefer the `vult-` prefix for generic verbs. When re-validating on a newer Claude Code, check for new built-ins: compare the `slash_commands` in a headless `--output-format stream-json --verbose` init event, and search the binary for `aliases:[` and `name:"<skill>"`.
+- Adding or renaming a skill: update `$expectedSkills` in `validate.ps1`, the README skill tables and the list in `claude/CLAUDE.md` (validate checks the last two). Mode skills also go in `$modeSkills` and must keep `disable-model-invocation: true`. Names must not match a built-in Claude Code command or alias (`$reservedNames` in `validate.ps1`); prefer the `vult-` prefix for generic verbs. When re-validating on a newer Claude Code, check for new built-ins: compare the `slash_commands` in a headless `--output-format stream-json --verbose` init event, and search the binary for `aliases:[` and `name:"<skill>"`.
 - Version in `VERSION`; `CHANGELOG.md` section `## vX.Y.Z` must match it (validate checks).
 - After changing the scripts, run the tests in both PowerShell editions.
 - Tested against Claude Code `2.1.332` (`$TestedClaudeVersion` in the module). Bump it after re-validating on a newer version.
