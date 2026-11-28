@@ -62,8 +62,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Regression tests
-        shell: ${{ matrix.shell }}
-        run: .\tests\Run-Tests.ps1
+        shell: pwsh
+        run: '& ${{ matrix.shell }} -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1'
 
   validate:
     if: always()
