@@ -44,6 +44,9 @@ function Warn([string]$m) { Write-CcWarn $m; $script:warnings++ }
 
 $expectedSkills = @('vult-fast', 'vult-dev', 'vult-prod', 'init-project', 'production-audit', 'issue', 'hotfix', 'vult-ship',
     'release-candidate', 'promote-stable', 'handoff', 'resume-project')
+# Mode skills change how much process a session applies, so only the user may
+# switch modes: Claude must never invoke one on its own.
+$modeSkills = @('vult-fast', 'vult-dev', 'vult-prod')
 
 # Built-in Claude Code command names and aliases a skill must not reuse, or one
 # of them may shadow the other (#3). Collected on Claude Code 2.1.332 from a
@@ -108,6 +111,16 @@ foreach ($dir in @(Get-ChildItem -LiteralPath $skillsDir -Directory)) {
     if ($dir.Name -notmatch '^[a-z0-9-]{1,64}$') { Fail "skills/$($dir.Name): name must be lowercase letters, digits and hyphens" }
     if ($reservedNames -contains $dir.Name) { Fail "skills/$($dir.Name): conflicts with a built-in Claude Code command; rename it" }
     if (-not $fm['description']) { Fail "skills/$($dir.Name): description is empty" }
+    if ($modeSkills -contains $dir.Name -and $fm['disable-model-invocation'] -ne 'true') {
+        Fail "skills/$($dir.Name): mode skills need 'disable-model-invocation: true'"
+    }
+}
+# Every shipped skill is documented where users and Claude look for it.
+$globalText = Read-TextFile (Join-Path $sourceDir 'CLAUDE.md')
+$readmeText = Read-TextFile (Join-Path $repo 'README.md')
+foreach ($s in $expectedSkills) {
+    if ($globalText -notmatch ('`/' + [regex]::Escape($s) + '`')) { Fail "claude/CLAUDE.md does not list /$s" }
+    if ($readmeText -notmatch ('\| `/' + [regex]::Escape($s) + '`')) { Fail "README.md skill table does not list /$s" }
 }
 $agentsDir = Join-Path $sourceDir 'agents'
 if (Test-Path -LiteralPath $agentsDir) {

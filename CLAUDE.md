@@ -36,7 +36,7 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 ## Changes
 
 - Skills stay concise and procedural. A skill that pushes, merges, tags or releases has `disable-model-invocation: true` and confirms before outward-facing steps.
-- Adding or renaming a skill: update `$expectedSkills` in `validate.ps1`, the README table and the list in `claude/CLAUDE.md`. Names must not match a built-in Claude Code command or alias (`$reservedNames` in `validate.ps1`); prefer the `vult-` prefix for generic verbs. When re-validating on a newer Claude Code, check for new built-ins: compare the `slash_commands` in a headless `--output-format stream-json --verbose` init event, and search the binary for `aliases:[` and `name:"<skill>"`.
+- Adding or renaming a skill: update `$expectedSkills` in `validate.ps1`, the README table and the list in `claude/CLAUDE.md` (validate checks the last two). Mode skills also go in `$modeSkills` and must keep `disable-model-invocation: true`. Names must not match a built-in Claude Code command or alias (`$reservedNames` in `validate.ps1`); prefer the `vult-` prefix for generic verbs. When re-validating on a newer Claude Code, check for new built-ins: compare the `slash_commands` in a headless `--output-format stream-json --verbose` init event, and search the binary for `aliases:[` and `name:"<skill>"`.
 - Version in `VERSION`; `CHANGELOG.md` section `## vX.Y.Z` must match it (validate checks).
 - After changing the scripts, run the tests in both PowerShell editions.
 - Tested against Claude Code `2.1.332` (`$TestedClaudeVersion` in the module). Bump it after re-validating on a newer version.
