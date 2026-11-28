@@ -1,11 +1,15 @@
-# Validate repository content and run the install/merge/restore regression
-# tests on both PowerShell editions a workstation may have.
+# Change-aware CI. Every run validates repository content. The regression
+# tests run on both PowerShell editions, in parallel, only when a pull request
+# changes something other than docs. Pushes to main re-check content only:
+# the pull request already tested the merge. The "validate" job always runs
+# and is the required status check.
 name: CI
 
 on:
-  push:
-    branches: ["**"]
   pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,16 +19,57 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  validate:
+  content:
     runs-on: windows-2025
+    outputs:
+      tests: ${{ steps.changes.outputs.tests }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Validate repository (Windows PowerShell 5.1)
         shell: powershell
         run: .\scripts\validate.ps1 -RepoOnly
-      - name: Tests (Windows PowerShell 5.1)
-        shell: powershell
-        run: .\tests\Run-Tests.ps1
-      - name: Tests (PowerShell 7)
+      - name: Decide whether tests are needed
+        id: changes
         shell: pwsh
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Docs, the changelog and VERSION don't affect the tests.
+          $docs = '^(docs/.*|[^/]+\.md|LICENSE|VERSION)$'
+          $run = 'false'
+          if ($env:EVENT -eq 'workflow_dispatch') { $run = 'true' }
+          elseif ($env:EVENT -eq 'pull_request') {
+            $files = @(git diff --name-only $env:BASE HEAD)
+            if ($LASTEXITCODE -ne 0) { $run = 'true' }
+            elseif (@($files | Where-Object { $_ -notmatch $docs }).Count -gt 0) { $run = 'true' }
+            $files | ForEach-Object { Write-Host "changed: $_" }
+          }
+          Write-Host "tests needed: $run"
+          "tests=$run" >> $env:GITHUB_OUTPUT
+
+  tests:
+    needs: content
+    if: needs.content.outputs.tests == 'true'
+    name: tests (${{ matrix.shell }})
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Regression tests
+        shell: ${{ matrix.shell }}
         run: .\tests\Run-Tests.ps1
+
+  validate:
+    if: always()
+    needs: [content, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require content validation and any needed tests to pass
+        if: needs.content.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
