@@ -1,6 +1,6 @@
 ---
 name: release-candidate
-description: Cut a release candidate vX.Y.Z-rc.N from the default branch - version bump and changelog via PR, annotated tag, CI-built draft pre-release, and a manual acceptance issue.
+description: Cut a release candidate vX.Y.Z-rc.N from the default branch when a release needs real-environment validation first - version and changelog, annotated tag, pre-release, acceptance checklist.
 argument-hint: "<X.Y.Z> (rc number is inferred)"
 disable-model-invocation: true
 ---
@@ -9,23 +9,19 @@ disable-model-invocation: true
 
 Target version: $ARGUMENTS
 
-Follow the project's `CLAUDE.md` or release docs where they exist; this is the default procedure.
+Use a release candidate when real-environment validation is outstanding or the release warrants it. Routine releases can go straight to stable with `/promote-stable X.Y.Z`. Follow the project's `CLAUDE.md` or release docs where they exist.
 
 ## Gates (stop and report if any fails)
 
-- On the default branch, clean and up to date (`git pull --ff-only`).
-- CI is green on the default branch (`gh run list --branch <default> -L 3`).
-- No open `release-blocker` issues (`gh issue list --label release-blocker`).
-- `## Unreleased` in `CHANGELOG.md` has entries.
-- Version: derive the bump from the changelog (breaking change: major; feature: minor; fix: patch) and confirm it with the user. `N` is the next number after `git tag -l "vX.Y.Z-rc.*"`.
+- On the default branch, clean and up to date (`git pull --ff-only`), with the latest CI run on it green.
+- No open `release-blocker` issues.
+- `CHANGELOG.md` has entries for the release. Derive the bump (breaking: major; feature: minor; fix: patch) and confirm the version with the user. `N` is the next number after `git tag -l "vX.Y.Z-rc.*"`.
 
 ## Steps
 
-1. Branch `release/vX.Y.Z-rc.N`. Change only the version source and the changelog: rename `## Unreleased` to `## vX.Y.Z-rc.N` and add an empty `## Unreleased` above it. Commit `Release vX.Y.Z-rc.N`.
-2. Open a PR and wait for green CI. Merge with a merge commit once the user confirms, then pull the default branch.
-3. Tag the merged commit: `git tag -a vX.Y.Z-rc.N -m "vX.Y.Z-rc.N"`. Check the tag matches the version source. **Confirm, then** `git push origin vX.Y.Z-rc.N`. Tags are permanent.
-4. If there's a release workflow, watch it (`gh run watch`) and check that it creates a draft pre-release with CI-built assets and checksums. If there isn't one and the project has no build artifacts, run `gh release create vX.Y.Z-rc.N --draft --prerelease --notes-file <file>`. Never upload locally built artifacts.
-5. Draft notes cover the changes, **Verified**, **Not yet verified**, known issues and checksums. Publish only as a pre-release, never as Latest, and only after the user confirms.
-6. Create or update the acceptance issue `Acceptance: vX.Y.Z` with `/issue`, with a checklist of manual checks against this RC. Label fixes awaiting those checks `awaiting-acceptance`.
+1. **Version.** If the version source and changelog already name `vX.Y.Z-rc.N` (bumped in the work's PR), skip to step 2. Otherwise branch `release/vX.Y.Z-rc.N`, set the version, rename `## Unreleased` to `## vX.Y.Z-rc.N` above a new empty `## Unreleased`, and merge it through the `/vult-ship` steps.
+2. **Tag** the default branch commit: `git tag -a vX.Y.Z-rc.N -m "vX.Y.Z-rc.N"`, check it matches the version source, and push it after the user confirms. Tags are permanent.
+3. **Pre-release.** If there's a release workflow, check its draft pre-release has CI-built assets. Otherwise `gh release create vX.Y.Z-rc.N --prerelease --notes-file <file>`. Notes cover the changes, Verified, Not yet verified and known issues. Never upload locally built artifacts or mark an RC as Latest.
+4. **Acceptance.** Add the real-environment checks to the version's acceptance issue (`/issue`), or create `Acceptance: vX.Y.Z` with a checklist.
 
-Promote to stable later with `/promote-stable`.
+Promote it later with `/promote-stable vX.Y.Z-rc.N`.

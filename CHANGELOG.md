@@ -4,8 +4,17 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+## v1.0.0-rc.5
+
+Proportional standards, by owner decision during the v1.0.0 freeze. The freeze applies again from this release.
+
 ### Changed
 
+- Shared standards scale process with risk, scope and impact. Each mode has a clear level of planning, validation, issues, docs, review and a soft time budget, and validation follows what changed: docs edits get docs checks, not the full test suite. Fast and dev mode no longer need plan approval for routine, reversible work, and fast mode no longer keeps a list of deferred housekeeping. The managed `CLAUDE.md` is shorter and drops rules that duplicated or contradicted each other. (#22)
+- `/vult-ship` works at the current mode instead of applying full production standards to everything. It keeps working commit history, reuses validation already run on the final change, merges once required checks pass without a second confirmation, and deletes the merged branch. (#22)
+- Releases: release candidates and acceptance checklists are for releases that need real-environment checks. `/promote-stable X.Y.Z` releases the default branch directly, and both release skills skip their release PR when the version and changelog were already bumped in the work's PR. `/hotfix` ships a patch release directly unless the fix needs field checks. (#22)
+- `/issue` steers related work into one issue with a checklist; `/production-audit`, `production-reviewer` and `/init-project` judge in proportion to the project's risk. `/init-project` proposes fewer labels and a change-aware CI workflow from a new `templates/ci.yml`. (#22)
+- CI runs on pull requests, pushes to `main` and manual dispatch instead of every branch push plus the PR. Docs-only pull requests skip the regression tests, the two PowerShell editions test in parallel, and pushes to `main` re-check content only. The required `validate` check is now an always-running gate job, so skipped tests never leave it pending. (#22)
 - The README is now a short landing page: quick setup, everyday commands, modes and the skills grouped by purpose with examples. Installation options, sign-in, configuration and sync, troubleshooting and team setup moved to pages under `docs/`. Documentation only.
 
 ## v1.0.0-rc.4

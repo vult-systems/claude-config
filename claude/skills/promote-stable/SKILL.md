@@ -1,28 +1,27 @@
 ---
 name: promote-stable
-description: Promote an accepted release candidate to stable vX.Y.Z - verify acceptance passed and no code changed since the RC, release commit with only version and changelog, tag, CI-built draft release.
-argument-hint: "<vX.Y.Z-rc.N>"
+description: Publish stable vX.Y.Z - either promote an accepted release candidate unchanged, or release the default branch directly when routine validation is enough. Version and changelog, tag, release.
+argument-hint: "<vX.Y.Z-rc.N | X.Y.Z>"
 disable-model-invocation: true
 ---
 
 # /promote-stable
 
-Release candidate: $ARGUMENTS (default: the newest `git tag -l "v*-rc.*" --sort=-v:refname`).
+Release: $ARGUMENTS (default: the newest `git tag -l "v*-rc.*" --sort=-v:refname`).
 
-Follow the project's `CLAUDE.md` or release docs where they exist.
+Follow the project's `CLAUDE.md` or release docs where they exist, including any rule that stable releases need an RC.
 
 ## Gates (stop and report every one that fails)
 
-- The acceptance issue for this version has every item checked, with results recorded (`gh issue view <n>`).
+- On the default branch, clean and up to date, with the latest CI run on it green.
 - No open `release-blocker` issues.
-- CI is green on the default branch.
-- No code has changed since the RC: `git diff vX.Y.Z-rc.N..<default> --stat` shows only docs, changelog or CI config. Any code change needs a new RC, not a promotion.
+- **Promoting an RC:** its acceptance checklist is complete with results recorded, and `git diff vX.Y.Z-rc.N..<default> --stat` shows only docs, changelog or CI config. A code change needs a new RC.
+- **Direct release (`X.Y.Z`):** the changes since the last release were validated in proportion (their PRs say how), and none needs a real-environment check that hasn't happened. Confirm the version with the user.
 
 ## Steps
 
-1. Branch `release/vX.Y.Z`. Set the version source to `X.Y.Z`. Add a `## vX.Y.Z` section to `CHANGELOG.md` that summarises the RC sections, and keep the RC sections. Commit `Release vX.Y.Z`.
-2. Open a PR and wait for green CI. Merge with a merge commit once the user confirms, then pull.
-3. `git tag -a vX.Y.Z -m "vX.Y.Z"` on the merged commit. **Confirm, then** push the tag.
-4. Check that the release workflow made a draft with CI-built assets. Write the notes: changes since the last stable release, **Verified** (link the acceptance issue), known limitations, checksums. Publishing it as Latest is the user's step unless they say otherwise.
-5. Close the acceptance issue, and the `awaiting-acceptance` issues whose checks passed, each with a comment naming the release. Never delete or re-tag the RCs.
-6. Update the "Current state" section of the project's `CLAUDE.md` through a small PR.
+1. **Version.** If the version source and changelog already name `vX.Y.Z`, skip to step 2. Otherwise branch `release/vX.Y.Z`, set the version, and add a `## vX.Y.Z` changelog section (summarising the RC sections, which stay, or renaming `## Unreleased`). Merge it through the `/vult-ship` steps.
+2. **Tag** `git tag -a vX.Y.Z -m "vX.Y.Z"` on the default branch and push it after the user confirms.
+3. **Release.** Check the release workflow's draft has CI-built assets, or run `gh release create vX.Y.Z --notes-file <file>` when there are no artifacts. Notes: changes since the last stable release, Verified (link the acceptance issue if any), known limitations. Publishing as Latest is the user's step unless they say otherwise. The previous release stays available for rollback.
+4. **Close** the acceptance issue and the issues whose checks passed, each with a comment naming the release. Never delete or re-tag RCs.
+5. **Update** "Current state" in the project's `CLAUDE.md` in the same release PR where possible, otherwise in a small follow-up.

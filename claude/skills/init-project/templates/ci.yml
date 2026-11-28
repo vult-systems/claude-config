@@ -1,0 +1,57 @@
+# Change-aware CI. Docs-only pull requests skip the tests. The "ci" job always
+# runs and is the only required status check, so path filtering never leaves
+# a required check pending. Replace the <...> placeholders.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.f.outputs.code }}
+    steps:
+      - uses: actions/checkout@<sha> # <version>
+        with:
+          fetch-depth: 0
+      - id: f
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          code=true
+          if [ "$EVENT" = pull_request ] && files=$(git diff --name-only "$BASE" HEAD); then
+            echo "$files" | grep -Evq '^(docs/.*|[^/]+\.md|LICENSE)$' || code=false
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: <windows-2025 | ubuntu-latest>
+    steps:
+      - uses: actions/checkout@<sha> # <version>
+      # Set up the runtime with dependency caching, e.g. actions/setup-python
+      # with cache: pip.
+      - run: <lint command>
+      - run: <test command>
+
+  ci:
+    if: always()
+    needs: [changes, test]
+    runs-on: ubuntu-latest
+    steps:
+      - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

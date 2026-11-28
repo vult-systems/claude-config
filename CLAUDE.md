@@ -1,18 +1,20 @@
 # CLAUDE.md
 
-claude-config holds shared Claude Code user configuration for Windows workstations (global standards, skills, agents and security settings) plus the PowerShell scripts that install and sync them. It's public (MIT) and meant to be used as is or forked by teams. It is itself a production project, so the global standards apply.
+claude-config holds shared Claude Code user configuration for Windows workstations (global standards, skills, agents and security settings) plus the PowerShell scripts that install and sync them. It's public (MIT) and meant to be used as is or forked by teams. The global standards apply. It changes other people's workstations, so script changes get dev-mode validation at least.
 
 ## Commands
 
 ```
 .\setup.cmd                             # full workstation setup (tools, PATH, sign-in, install, validate); -DryRun to preview
 .\scripts\validate.ps1 -RepoOnly        # content checks, as CI runs them
-.\tests\Run-Tests.ps1                   # regression tests; run in BOTH powershell.exe and pwsh
+.\tests\Run-Tests.ps1                   # regression tests; locally in powershell.exe, CI also runs pwsh
 .\scripts\validate.ps1                  # plus this workstation's tools, sign-in and install drift
 .\scripts\sync.ps1 -DryRun              # what an install would change here
 ```
 
 Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they never touch the real `~/.claude`, user PATH or installed tools.
+
+CI (`.github/workflows/ci.yml`) runs on pull requests, pushes to `main` and manual dispatch. Every run validates content. The tests run on both editions in parallel only for pull requests that change more than `docs/`, root `*.md`, `LICENSE` or `VERSION`, and on manual runs. The always-running `validate` job is the required check.
 
 ## Layout
 
@@ -36,16 +38,16 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 
 ## Changes
 
-- Skills stay concise and procedural. A skill that pushes, merges, tags or releases has `disable-model-invocation: true` and confirms before outward-facing steps.
+- Skills stay concise and procedural. A skill that pushes, merges, tags or releases has `disable-model-invocation: true`. Typing it approves its normal scoped steps; it confirms before tags, releases and anything outside its scope.
 - Adding or renaming a skill: update `$expectedSkills` in `validate.ps1`, the README skill tables and the list in `claude/CLAUDE.md` (validate checks the last two). Mode skills also go in `$modeSkills` and must keep `disable-model-invocation: true`. Names must not match a built-in Claude Code command or alias (`$reservedNames` in `validate.ps1`); prefer the `vult-` prefix for generic verbs. When re-validating on a newer Claude Code, check for new built-ins: compare the `slash_commands` in a headless `--output-format stream-json --verbose` init event, and search the binary for `aliases:[` and `name:"<skill>"`.
 - Version in `VERSION`; `CHANGELOG.md` section `## vX.Y.Z` must match it (validate checks).
-- After changing the scripts, run the tests in both PowerShell editions.
+- After changing the scripts, run the tests in Windows PowerShell 5.1; CI covers PowerShell 7. Docs-only changes need only `validate.ps1 -RepoOnly`.
 - Tested against Claude Code `2.1.332` (`$TestedClaudeVersion` in the module). Bump it after re-validating on a newer version.
 
 ## Current state
 
-- **v1.0.0-rc.4** (tag `v1.0.0-rc.4`, commit `7f65486`): published as a GitHub pre-release on 2026-11-27. It is rc.3 plus session modes (#16, PR #17): `/vult-fast`, `/vult-dev`, `/vult-prod`, mode-aware planning in the shared standards, and validate checks that mode skills are user-invoked and every skill is documented. This was the only feature added during the freeze, by owner decision.
-- **v1.0.0-rc.3** (tag `v1.0.0-rc.3`, commit `6f73223`): rc.2 (`4004607`: public repository, `install.ps1` + `setup.cmd` onboarding, safeguard-only shared settings) plus the #12 fix: the Claude Code sign-in check reads `claude auth status --json` stdout only and reports signed in, signed out, or "Could not check". v1.0.0-rc.1 was never tagged.
-- **Feature freeze** until v1.0.0, reinstated after rc.4: no new features. Only fixes for acceptance failures (each with an issue and a regression test) and docs. A fix ships as a new RC (`v1.0.0-rc.N`), and the acceptance checklist is rerun against it. v1.0.0 is the accepted RC's code with only the version and changelog changed.
-- Next step: run every item in the acceptance issue (#2) on real workstations against rc.4, including the public fresh-workstation onboarding and a two-workstation sync round trip. #5, #6, #8, #12 and #16 stay open until #2 verifies them (#12 needs a real `claude update`).
+- **v1.0.0-rc.5**: proportional standards (#22). Modes scale process with risk and `/vult-ship` works at the current mode; release candidates and acceptance are optional for routine releases; CI is change-aware. The v1.0.0 freeze was reopened for this revision by owner decision. Also ships the README restructure (#20).
+- **v1.0.0-rc.4** (`7f65486`): session modes (#16). **rc.3** (`6f73223`): the #12 sign-in fix. **rc.2** (`4004607`): public repository and onboarding. rc.1 was never tagged.
+- **Feature freeze** until v1.0.0, reinstated after rc.5: no new features. Only fixes for acceptance failures (each with an issue and a regression test) and docs. A fix ships as a new RC, and the acceptance checklist is rerun against it. v1.0.0 is the accepted RC's code with only the version and changelog changed.
+- Next step: run the acceptance issue (#2) on real workstations against rc.5, including fresh-workstation onboarding and a two-workstation sync round trip. #5, #6, #8, #12, #16 and #22 stay open until #2 verifies them (#12 needs a real `claude update`).
 - Repository settings: `main` protected (PR required with 0 approvals, `validate` check required, conversations resolved, no force-push or deletion), merged branches auto-deleted, private vulnerability reporting enabled (SECURITY.md).

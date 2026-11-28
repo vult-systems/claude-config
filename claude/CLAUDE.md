@@ -1,74 +1,77 @@
 # Global development standards
 
-These apply to every project on this workstation. A project's own `CLAUDE.md` takes precedence: it holds that project's commands, design decisions, release procedure and current state. Don't repeat these standards there.
+These apply to every project on this workstation. A project's own `CLAUDE.md` takes precedence and holds its commands, design decisions, release procedure, feature freezes and current state.
 
-## Working modes
+Process scales with risk, scope and impact. Stop when the requested outcome is done and verified; don't invent follow-up work.
 
-Sessions start in development mode. `/vult-fast`, `/vult-dev` and `/vult-prod` switch the mode for the rest of the session, and the most recent one wins. A mode changes how much process a change gets on a working branch: fast mode skips planning, issues, PRs, changelog entries, review and full test runs; development mode is the balanced default; production mode applies everything below in full.
+## Modes
 
-Planning before edits depends on the mode:
+Sessions start in dev mode. `/vult-fast`, `/vult-dev` and `/vult-prod` switch mode for the rest of the session. Every skill, `/vult-ship` included, works at the current mode and never escalates it.
 
-- Fast: implement directly. Ask only for consequential decisions, destructive actions, security concerns or real ambiguity.
-- Development: for multi-file or non-trivial work, give a brief plan when one is needed and wait for review before editing.
-- Production: give a plan and wait for approval before any multi-file or non-trivial edit.
+| | Fast | Dev (default) | Prod |
+|---|---|---|---|
+| Planning | None | Only for consequential or ambiguous work | Plan consequential changes and wait for approval |
+| Validation | Smoke test | Tests relevant to the change | Full regression, compatibility, security and deployment checks |
+| Issues | Optional | One per meaningful body of work | Every change tracked |
+| Docs, changelog | Optional | When behaviour or usage changes | Always kept in sync |
+| Review | None | When the risk justifies it | Independent review of non-trivial diffs |
+| Budget | 2-5 min | 5-10 min | 15-30 min |
 
-Personal preferences in your own `CLAUDE.md`, outside this managed block, may adjust how a mode plans and asks. They don't relax the rules below.
+Budgets are soft targets for validation and administration, not implementation. Say why when more is needed.
 
 In every mode:
 
-- The Security section, and confirming outward-facing steps, apply.
-- The project's `CLAUDE.md` takes precedence, including feature freezes.
-- Never commit experimental work to the default branch or a protected branch.
+- Ask before consequential, destructive, security-sensitive or out-of-scope actions.
+- The project's `CLAUDE.md` wins, including feature freezes.
+- Never commit to the default branch or a protected branch, except to initialise a repository. Work reaches it through a PR.
 - Never discard, reset or overwrite work you didn't make.
-- Work reaches the default branch only through `/vult-ship`, which holds it to the full standards whatever mode it was built in.
+- Never bypass a failed required check. Report what ran, passed, failed and is unverified; never claim validation you didn't do.
+- Keep changes on task. Ask before adding dependencies or changing build config or CI.
 
-## Change discipline
+## Validation
 
-- Keep changes small and on-task. Don't refactor unrelated code or build abstractions for hypothetical needs.
-- Every new dependency must justify itself. Prefer the standard library and tools the project already uses.
-- Existing behaviour and UI stay unless an issue says otherwise.
-- Keep docs in sync with the code in the same change: `README.md`, `docs/`, `CHANGELOG.md`, `CLAUDE.md`.
-- Confirm with me before outward-facing or hard-to-reverse steps (merging, tagging, publishing a release, closing an issue, deleting a branch, force-pushing) unless I've said to go ahead.
-- Report results faithfully: what was run, what passed, what failed, and what is still unverified.
+| Change | Validation |
+|---|---|
+| Docs only | Links, accuracy, formatting, docs checks |
+| Minor bug fix | Targeted regression test |
+| Small feature | Relevant tests and a smoke test |
+| Major feature | Full regression and relevant integration tests |
+| Dependencies, build | Affected build and compatibility checks |
+| Security, critical infrastructure | Comprehensive validation |
+
+- Test the final change, not every intermediate commit. Don't repeat a passing check unless its inputs changed. Leave compatibility matrices to CI.
+- New behaviour gets tests where they add value. A bug fix gets a regression test where practical.
+- Checks CI can't run (hardware, managed workstations, UX) go on an issue checklist when they matter.
 
 ## Issues
 
-- Track bugs, features and tech debt as GitHub Issues. Search existing issues first to avoid duplicates.
-- A bug issue has reproduction steps, expected and actual results, the environment, and acceptance criteria.
-- When work touches an issue, comment with the root cause (checked against the code), what changed (commit hashes), what was verified and how, and what is still unverified.
-- Never close an issue, or call a fix resolved, until it's verified in the environment where it was reported.
+- Use issues for meaningful features, bugs, tech debt and milestones. Search first. Put related work in one issue with a checklist. Trivial fixes need none. Bugs get reproduction steps, expected and actual results, and the environment.
+- When work on an issue lands, comment once: what changed, how it was verified, what is unverified. Close it when its objective is verified; keep important unverified items open.
 
 ## Branches, commits and pull requests
 
-- Work on a branch. Commit straight to the default branch only to initialise a repository.
-- Commits are focused (one concern each) and descriptive (what and why), and reference issues with `Refs #N`. Use `Fixes #N` only when the fix is verified. Each commit leaves the project buildable.
-- Open a PR that references its issues and says how it was tested. Merge only when every required check is green, using a merge commit so the focused commits land unchanged. Confirm CI is green on the default branch afterwards.
+- Commits are descriptive and reference issues with `Refs #N` (`Fixes #N` once verified). Keep working history. Squash only when it helps, never for cosmetics.
+- One PR for related implementation, tests, docs and release metadata. Merge with a merge commit once required checks pass, then delete the merged branch locally and remotely.
+- Asking to ship approves the normal scoped steps: push, PR, merge after checks, branch cleanup. Tags, releases and anything outside the scope still need confirmation unless authorized.
 - Never rewrite published history, force-push shared branches, or skip hooks or signing.
 
-## CI/CD
+## CI
 
-- CI runs lint and tests on every push and PR. Workflows call the project's own build and test scripts instead of copying steps into YAML.
+- Change-aware: docs-only changes skip the tests; other changes run the tests they affect, through the project's own scripts.
+- The required check is one always-running gate job that passes when the jobs it needs succeeded or were skipped. Workflow-level path filters leave required checks pending.
+- Run on pull requests and pushes to the default branch, not every branch push. Cancel superseded runs, cache dependencies, parallelise independent jobs.
 - Pin third-party actions to commit SHAs with the version in a comment. Give workflows least-privilege `permissions:`.
-- Release artifacts are built by CI from a tag, never uploaded from a workstation. Release workflows create drafts; publishing is a manual step.
 
-## Testing
+## Releases
 
-- New behaviour gets automated tests. Every bug fix gets a regression test that fails without the fix, where practical.
-- Run the project's lint and tests before pushing.
-- What CI can't check (real hardware, managed workstations, UX) goes in a manual acceptance checklist, tracked as an issue. CI doesn't substitute for it.
+- Semantic versioning, one version source, `vX.Y.Z` tags on the default branch. `CHANGELOG.md` is newest first, new work under `## Unreleased` (Added / Changed / Fixed / Removed / Security), each entry the user-visible effect and issue numbers.
+- Routine releases go straight to stable after proportionate validation, with the version bump in the work's own PR if convenient. Use release candidates (`vX.Y.Z-rc.N`) and an acceptance checklist when real-environment validation is outstanding.
+- CI builds artifacts from the tag; publish the validated artifact rather than rebuilding. Never move or delete published tags or replace published assets. Keep the previous release for rollback.
 
-## Versioning, changelog and releases
+## Builds and deployment
 
-- Semantic versioning, with one source of truth for the version that the build reads.
-- Tags are `vX.Y.Z`; release candidates are `vX.Y.Z-rc.N`. Tag only commits on the default branch. Never move or delete published tags or replace published assets.
-- `CHANGELOG.md` is newest first. New work goes under `## Unreleased`, grouped as Added / Changed / Fixed / Removed / Security. Entries are concise: the user-visible effect, the root cause, and issue numbers. The release commit renames the section to the version.
-- Ship a release candidate (pre-release) while environment or hardware validation is outstanding. Promote to stable only after the acceptance checklist passes. A stable release is the accepted RC's code with only the version and changelog changed.
-
-## Builds, deployment and diagnostics
-
-- Builds are reproducible: lock the toolchain and dependencies, with hashes where the ecosystem supports them.
-- Prefer portable deployment: standard user, no admin rights, no hidden machine state. No hardcoded usernames, absolute paths or machine-specific values.
-- Fail loudly: clear error messages, non-zero exit codes, and logs or crash reports a user can send. Provide a self-test or diagnostics command where practical.
+- Lock the toolchain and dependencies, with hashes where supported. Fail loudly: clear errors, non-zero exit codes, logs a user can send.
+- Deploy as a standard user without admin rights or hidden machine state. No hardcoded usernames, absolute paths or machine-specific values.
 
 ## Security
 
@@ -77,4 +80,4 @@ In every mode:
 
 ## Workflow skills
 
-`/vult-fast`, `/vult-dev`, `/vult-prod`, `/init-project`, `/production-audit`, `/issue`, `/vult-ship`, `/hotfix`, `/release-candidate`, `/promote-stable`, `/handoff`, `/resume-project`. They follow the project's own `CLAUDE.md` where it defines a different procedure.
+`/vult-fast`, `/vult-dev`, `/vult-prod`, `/init-project`, `/production-audit`, `/issue`, `/vult-ship`, `/hotfix`, `/release-candidate`, `/promote-stable`, `/handoff`, `/resume-project`. They follow the project's `CLAUDE.md` where it defines a different procedure.
