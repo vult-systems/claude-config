@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 This session is now in **development mode** until another mode skill is invoked. Sessions start in this mode. The rules that hold in every mode (global `CLAUDE.md`, "Working modes") still apply.
 
-- **Plan** multi-file or non-trivial changes briefly and let the user review before editing.
+- **Plan** multi-file or non-trivial changes briefly, when a plan is needed, and let the user review it before editing.
 - **Branch** as the global standards say. Commits are focused and reference issues when one exists.
 - **Test** new behaviour and bug fixes with automated tests. Run the tests related to the change while iterating; run the full suite before pushing.
 - **Document** user-visible changes in the same change (README, docs, `## Unreleased` in `CHANGELOG.md`).

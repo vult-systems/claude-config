@@ -104,7 +104,7 @@ A restore also backs up the current state first, so it can be undone.
 | `/handoff` | Push the branch and post a structured handoff note on its draft PR. |
 | `/resume-project` | Sync the branch, read CLAUDE.md, the latest handoff note and CI status, then summarise the next steps. |
 
-Sessions start in development mode. A mode skill changes how much process work on a branch gets, for the rest of the session. Security settings, project rules such as feature freezes, and confirmations before outward-facing steps apply in every mode, and work reaches the default branch only through `/vult-ship`, at full standards.
+Sessions start in development mode. A mode skill changes how much process work on a branch gets, for the rest of the session. Planning follows the mode: fast mode builds directly, development mode gives a brief plan for non-trivial work when needed, and production mode waits for plan approval before any multi-file or non-trivial edit. Your own text outside the managed block in `~/.claude/CLAUDE.md` can adjust this, and installs never overwrite it. Security settings, project rules such as feature freezes, and confirmations before outward-facing steps apply in every mode, and work reaches the default branch only through `/vult-ship`, at full standards.
 
 The mode skills and the skills that push, merge, tag or release run only when you type them, and they confirm before each outward-facing step. The `production-reviewer` agent gives a read-only review of a diff or PR; `/vult-ship` uses it for non-trivial changes.
 

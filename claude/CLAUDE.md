@@ -6,6 +6,14 @@ These apply to every project on this workstation. A project's own `CLAUDE.md` ta
 
 Sessions start in development mode. `/vult-fast`, `/vult-dev` and `/vult-prod` switch the mode for the rest of the session, and the most recent one wins. A mode changes how much process a change gets on a working branch: fast mode skips planning, issues, PRs, changelog entries, review and full test runs; development mode is the balanced default; production mode applies everything below in full.
 
+Planning before edits depends on the mode:
+
+- Fast: implement directly. Ask only for consequential decisions, destructive actions, security concerns or real ambiguity.
+- Development: for multi-file or non-trivial work, give a brief plan when one is needed and wait for review before editing.
+- Production: give a plan and wait for approval before any multi-file or non-trivial edit.
+
+Personal preferences in your own `CLAUDE.md`, outside this managed block, may adjust how a mode plans and asks. They don't relax the rules below.
+
 In every mode:
 
 - The Security section, and confirming outward-facing steps, apply.

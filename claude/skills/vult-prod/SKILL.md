@@ -9,6 +9,7 @@ disable-model-invocation: true
 This session is now in **production mode** until another mode skill is invoked.
 
 - Apply every section of the global standards and the project's `CLAUDE.md` in full, with no shortcuts.
+- Give a plan and wait for the user's approval before any multi-file or non-trivial edit.
 - Every change has an issue. Every fix has a regression test that fails without it. Run the full lint and test suite before each push.
 - Have `production-reviewer` review every non-trivial diff before its PR.
 - Releases go through `/release-candidate` and `/promote-stable`, and acceptance items go in an issue. Fixes stay open until verified where they were reported.
