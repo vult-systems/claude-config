@@ -275,6 +275,22 @@ try {
     Check 'failure names the conflict' ($out -match 'skills/ship: conflicts with a built-in')
     Remove-Item -LiteralPath $shipDir -Recurse -Force
 
+    Write-Host '== validate keeps mode skills user-invoked and documented'
+    $fastSkill = Join-Path $vr 'claude\skills\vult-fast\SKILL.md'
+    $fastText = Read-TextFile $fastSkill
+    Write-TextFile $fastSkill ($fastText -replace 'disable-model-invocation: true\r?\n', '')
+    $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
+    Check 'validate fails on a model-invocable mode skill' ($LASTEXITCODE -eq 1 -and $out -match "skills/vult-fast: mode skills need 'disable-model-invocation: true'")
+    Write-TextFile $fastSkill $fastText
+    $globalMd = Join-Path $vr 'claude\CLAUDE.md'
+    $globalMdText = Read-TextFile $globalMd
+    Write-TextFile $globalMd ($globalMdText.Replace(', `/resume-project`', ''))
+    $out = & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly 6>&1 2>&1 | Out-String
+    Check 'validate fails on a skill missing from the global CLAUDE.md' ($LASTEXITCODE -eq 1 -and $out -match 'claude/CLAUDE.md does not list /resume-project')
+    Write-TextFile $globalMd $globalMdText
+    & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') -RepoOnly | Out-Null
+    Check 'validate passes again after restoring' ($LASTEXITCODE -eq 0)
+
     Write-Host '== validate rejects personal email addresses (#8)'
     $mailFile = Join-Path $vr 'docs-note.md'
     Write-TextFile $mailFile ("Contact jane.doe" + "@acme-corp.net for access.`n")

@@ -2,6 +2,26 @@
 
 These apply to every project on this workstation. A project's own `CLAUDE.md` takes precedence: it holds that project's commands, design decisions, release procedure and current state. Don't repeat these standards there.
 
+## Working modes
+
+Sessions start in development mode. `/vult-fast`, `/vult-dev` and `/vult-prod` switch the mode for the rest of the session, and the most recent one wins. A mode changes how much process a change gets on a working branch: fast mode skips planning, issues, PRs, changelog entries, review and full test runs; development mode is the balanced default; production mode applies everything below in full.
+
+Planning before edits depends on the mode:
+
+- Fast: implement directly. Ask only for consequential decisions, destructive actions, security concerns or real ambiguity.
+- Development: for multi-file or non-trivial work, give a brief plan when one is needed and wait for review before editing.
+- Production: give a plan and wait for approval before any multi-file or non-trivial edit.
+
+Personal preferences in your own `CLAUDE.md`, outside this managed block, may adjust how a mode plans and asks. They don't relax the rules below.
+
+In every mode:
+
+- The Security section, and confirming outward-facing steps, apply.
+- The project's `CLAUDE.md` takes precedence, including feature freezes.
+- Never commit experimental work to the default branch or a protected branch.
+- Never discard, reset or overwrite work you didn't make.
+- Work reaches the default branch only through `/vult-ship`, which holds it to the full standards whatever mode it was built in.
+
 ## Change discipline
 
 - Keep changes small and on-task. Don't refactor unrelated code or build abstractions for hypothetical needs.
@@ -57,4 +77,4 @@ These apply to every project on this workstation. A project's own `CLAUDE.md` ta
 
 ## Workflow skills
 
-`/init-project`, `/production-audit`, `/issue`, `/vult-ship`, `/hotfix`, `/release-candidate`, `/promote-stable`, `/handoff`, `/resume-project`. They follow the project's own `CLAUDE.md` where it defines a different procedure.
+`/vult-fast`, `/vult-dev`, `/vult-prod`, `/init-project`, `/production-audit`, `/issue`, `/vult-ship`, `/hotfix`, `/release-candidate`, `/promote-stable`, `/handoff`, `/resume-project`. They follow the project's own `CLAUDE.md` where it defines a different procedure.
