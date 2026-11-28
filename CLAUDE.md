@@ -43,8 +43,7 @@ Tests use a temporary Claude home, fake tool shims and a scratch HKCU key; they 
 
 ## Current state
 
-- **v1.0.0-rc.2** (tag `v1.0.0-rc.2`, commit `4004607`): published as a GitHub pre-release on 2026-11-26. Public repository, `install.ps1` + `setup.cmd` onboarding, safeguard-only shared settings. v1.0.0-rc.1 was never tagged.
+- **v1.0.0-rc.3** (tag `v1.0.0-rc.3`, commit `6f73223`): published as a GitHub pre-release on 2026-11-27. It is rc.2 (`4004607`: public repository, `install.ps1` + `setup.cmd` onboarding, safeguard-only shared settings) plus the #12 fix: the Claude Code sign-in check reads `claude auth status --json` stdout only and reports signed in, signed out, or "Could not check". v1.0.0-rc.1 was never tagged.
 - **Feature freeze** until v1.0.0: no new features. Only fixes for acceptance failures (each with an issue and a regression test) and docs. A fix ships as a new RC (`v1.0.0-rc.N`), and the acceptance checklist is rerun against it. v1.0.0 is the accepted RC's code with only the version and changelog changed.
-- Acceptance found #12 (false "Claude Code not signed in" after `claude update`, a validator bug). The fix is under `## Unreleased` and ships as **v1.0.0-rc.3**.
-- Next step: run every item in the acceptance issue (#2) on real workstations against the newest RC, including the public fresh-workstation onboarding and a two-workstation sync round trip. #5, #6, #8 and #12 stay open until #2 verifies them.
+- Next step: run every item in the acceptance issue (#2) on real workstations against rc.3, including the public fresh-workstation onboarding and a two-workstation sync round trip. #5, #6, #8 and #12 stay open until #2 verifies them (#12 needs a real `claude update`).
 - Repository settings: `main` protected (PR required with 0 approvals, `validate` check required, conversations resolved, no force-push or deletion), merged branches auto-deleted, private vulnerability reporting enabled (SECURITY.md).
