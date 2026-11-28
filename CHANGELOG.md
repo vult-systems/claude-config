@@ -4,6 +4,8 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+## v1.0.0-rc.3
+
 ### Fixed
 
 - `validate.ps1`, `bootstrap.ps1` and `setup` could report "Claude Code not signed in" while it was signed in, for example right after `claude update`. The check parsed all of `claude auth status` output, stderr included, as one JSON document, so any extra line made it fail. It now passes `--json`, reads stdout only and finds the JSON object in it. A check that fails or can't be read is reported as "Could not check Claude Code sign-in" with the error, separately from a real signed-out state, and setup no longer offers a browser sign-in in that case. (#12)
