@@ -1,18 +1,16 @@
 ---
 name: vult-prod
-description: Switch this session to production mode - every global production standard in full, including issues, full test suites, independent review, CI, acceptance checklists and release management.
+description: Switch this session to production mode - planned changes, independent review, full regression, compatibility and security validation, and formal release acceptance where warranted.
 disable-model-invocation: true
 ---
 
 # /vult-prod
 
-This session is now in **production mode** until another mode skill is invoked.
+This session is now in **production mode** until another mode skill is invoked. Use it for critical infrastructure, high-risk changes and major releases.
 
-- Apply every section of the global standards and the project's `CLAUDE.md` in full, with no shortcuts.
-- Give a plan and wait for the user's approval before any multi-file or non-trivial edit.
-- Every change has an issue. Every fix has a regression test that fails without it. Run the full lint and test suite before each push.
-- Have `production-reviewer` review every non-trivial diff before its PR.
-- Releases go through `/release-candidate` and `/promote-stable`, and acceptance items go in an issue. Fixes stay open until verified where they were reported.
-- Ship with `/vult-ship`.
-
-If leaving fast mode, show the deferred list first. Each item must be done or turned into an issue before shipping.
+- **Plan** consequential or multi-file changes and wait for approval before editing.
+- **Track** every change in an issue. Every fix gets a regression test that fails without it.
+- **Validate** fully: the whole test suite, compatibility, security and deployment implications. Still don't repeat a check whose inputs haven't changed.
+- **Review** every non-trivial diff with `production-reviewer` before its PR.
+- **Release** through `/release-candidate` and `/promote-stable` with an acceptance checklist when real-environment checks are outstanding. Fixes stay open until verified where they were reported.
+- **Ship** with `/vult-ship`.

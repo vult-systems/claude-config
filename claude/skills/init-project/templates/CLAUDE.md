@@ -16,22 +16,20 @@
 
 ## CI
 
-- `.github/workflows/ci.yml`: <what runs, on which OS and runtime versions>.
+- `.github/workflows/ci.yml`: <what runs, on which OS and runtime versions, and which changes skip the tests>. The required check is `ci`.
 - <Release workflow, if any: trigger, what it builds, that it creates a draft.>
 
 ## Design decisions to preserve
-
-Don't change these without an issue that discusses the trade-off:
 
 - **<Decision>.** <Why.>
 
 ## Versioning and releases
 
 - The version lives only in `<file>` (`<symbol>`).
-- Release procedure: <link to docs, or the steps that differ from the global default>.
-- Manual acceptance checklist: <where it lives>.
+- Releases: <direct stable releases, or release candidates with an acceptance checklist, and why>.
 
 ## Current state
 
-- **Releases:** <latest stable, current RC, open acceptance issue>.
+- **Releases:** <latest release, current RC and acceptance issue if any>.
+- **Feature freeze:** <none, or what is frozen until when>.
 - **In progress:** <issues or PRs>.

@@ -38,11 +38,11 @@ Every session starts in development mode. Type a mode skill to change how much p
 
 | Skill | Use it for |
 |---|---|
-| `/vult-fast` | Prototyping. Claude builds directly on a local `exp/` branch with smoke tests only, and defers issues, PRs and changelog to `/vult-ship`. |
-| `/vult-dev` | Normal work (the default). A brief plan for non-trivial changes, relevant tests, the usual PR flow. |
-| `/vult-prod` | Release-critical work. Every standard in full: plan approval, review, CI, acceptance. |
+| `/vult-fast` | Prototyping. Claude builds directly on a local branch with smoke tests and minimal administration. Approved prototypes ship as they are. |
+| `/vult-dev` | Everyday work (the default). Routine requests implemented directly, relevant tests, meaningful issues and docs, lightweight PRs. |
+| `/vult-prod` | Critical or high-risk work. Plan approval, independent review, full regression and compatibility checks, formal acceptance where warranted. |
 
-In every mode, security settings and project rules (such as a feature freeze) still apply, Claude confirms before outward-facing steps, and work reaches the default branch only through `/vult-ship`. See [Skills and modes](docs/skills.md) for the details.
+Process scales with the risk of the change, and validation matches what changed: a docs edit gets docs checks, not the full test suite. In every mode, security settings and project rules (such as a feature freeze) still apply, Claude asks before consequential or destructive steps, and work reaches the default branch through a PR. See [Skills and modes](docs/skills.md) for the details.
 
 ## Skills
 
@@ -58,10 +58,10 @@ In every mode, security settings and project rules (such as a feature freeze) st
 
 | Skill | What it does | Example |
 |---|---|---|
-| `/vult-ship` | Tests, focused commits, PR, green CI, merge commit, and a check of the default branch. | `/vult-ship 42` |
-| `/hotfix` | Smallest safe fix for a released bug, with a regression test and a patch release candidate. | `/hotfix 57` |
-| `/release-candidate` | Version bump and changelog, `vX.Y.Z-rc.N` tag, draft pre-release, acceptance issue. | `/release-candidate 1.2.0` |
-| `/promote-stable` | Promotes an accepted release candidate to `vX.Y.Z` once acceptance passes and no code has changed. | `/promote-stable v1.2.0-rc.2` |
+| `/vult-ship` | Validation for the current mode, PR, required checks, merge and branch cleanup. | `/vult-ship 42` |
+| `/hotfix` | Smallest safe fix for a released bug, with a regression test and a patch release. | `/hotfix 57` |
+| `/release-candidate` | For releases that need real-environment checks first: `vX.Y.Z-rc.N` tag, pre-release, acceptance checklist. | `/release-candidate 1.2.0` |
+| `/promote-stable` | Stable `vX.Y.Z`: promotes an accepted release candidate, or releases the default branch directly. | `/promote-stable 1.2.0` |
 
 **Move between machines**
 
@@ -70,7 +70,7 @@ In every mode, security settings and project rules (such as a feature freeze) st
 | `/handoff` | Pushes the branch and posts a handoff note on its draft PR. | `/handoff finish the export dialog` |
 | `/resume-project` | Syncs the branch, reads the project notes and latest handoff, and lists next steps. | `/resume-project` |
 
-Skills that push, merge, tag or release only run when you type them, and they confirm before each outward-facing step.
+Skills that push, merge, tag or release only run when you type them. Typing `/vult-ship` approves its push, PR and merge; tags and releases are confirmed first.
 
 ## Documentation
 
