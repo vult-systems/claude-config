@@ -19,7 +19,7 @@ Thanks for helping. This repository is configuration plus PowerShell scripts tha
    powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1
    pwsh -NoProfile -File .\tests\Run-Tests.ps1
    ```
-5. Update the docs in the same change: `README.md`, `CHANGELOG.md` (under `## Unreleased`: Added / Changed / Fixed / Removed / Security) and `CLAUDE.md` where relevant.
+5. Update the docs in the same change: `README.md` (kept short: quick start, modes, skills), the page in `docs/` that covers the topic, `CHANGELOG.md` (under `## Unreleased`: Added / Changed / Fixed / Removed / Security) and `CLAUDE.md` where relevant.
 6. Open a pull request that references the issue and says how you tested it, including anything you couldn't test (real installs, a fresh workstation, managed machines). CI must be green. Maintainers merge with a merge commit.
 
 ## Your identity and data
@@ -29,7 +29,7 @@ Thanks for helping. This repository is configuration plus PowerShell scripts tha
 
 ## Adding or renaming a skill
 
-Follow the checklist under "Changes" in [CLAUDE.md](CLAUDE.md): update `$expectedSkills` in `scripts/validate.ps1`, the README table and the list in `claude/CLAUDE.md`. Names must not clash with built-in Claude Code commands. Skills that push, merge, tag or release need `disable-model-invocation: true` and must confirm before outward-facing steps.
+Follow the checklist under "Changes" in [CLAUDE.md](CLAUDE.md): update `$expectedSkills` in `scripts/validate.ps1`, the README skill tables and the list in `claude/CLAUDE.md`. Names must not clash with built-in Claude Code commands. Skills that push, merge, tag or release need `disable-model-invocation: true` and must confirm before outward-facing steps.
 
 ## License
 

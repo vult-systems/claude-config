@@ -4,6 +4,10 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+### Changed
+
+- The README is now a short landing page: quick setup, everyday commands, modes and the skills grouped by purpose with examples. Installation options, sign-in, configuration and sync, troubleshooting and team setup moved to pages under `docs/`. Documentation only.
+
 ## v1.0.0-rc.4
 
 The one feature added during the v1.0.0 freeze, by owner decision. The freeze applies again from this release.
