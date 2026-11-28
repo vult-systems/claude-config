@@ -4,6 +4,10 @@ Notable changes, newest first. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+### Added
+
+- Session modes: `/vult-fast` (direct implementation on a local experimental branch, smoke tests, housekeeping deferred), `/vult-dev` (the default) and `/vult-prod` (all production standards). The global `CLAUDE.md` lists the rules that hold in every mode, and `/vult-ship` brings experimental work up to the full standards before it reaches the default branch.
+
 ## v1.0.0-rc.3
 
 ### Fixed

@@ -91,6 +91,9 @@ A restore also backs up the current state first, so it can be undone.
 
 | Skill | Purpose |
 |---|---|
+| `/vult-fast` | Fast mode for the session: build directly on a local `exp/` branch, smoke tests only, issues, PRs and changelog deferred to `/vult-ship`. |
+| `/vult-dev` | Development mode (the default): brief plan, relevant tests, focused docs, normal PR flow. |
+| `/vult-prod` | Production mode: every standard in full, including review, CI, acceptance and releases. |
 | `/init-project` | Add project CLAUDE.md, CHANGELOG, version source, .gitignore, CI and labels to a repository, without overwriting what exists. |
 | `/production-audit` | Read-only audit against the standards; ranked findings with evidence. |
 | `/issue` | Duplicate check, then a well-formed bug, enhancement, tech-debt or acceptance issue. |
@@ -101,7 +104,9 @@ A restore also backs up the current state first, so it can be undone.
 | `/handoff` | Push the branch and post a structured handoff note on its draft PR. |
 | `/resume-project` | Sync the branch, read CLAUDE.md, the latest handoff note and CI status, then summarise the next steps. |
 
-The skills that push, merge, tag or release run only when you type them, and they confirm before each outward-facing step. The `production-reviewer` agent gives a read-only review of a diff or PR; `/vult-ship` uses it for non-trivial changes.
+Sessions start in development mode. A mode skill changes how much process work on a branch gets, for the rest of the session. Security settings, project rules such as feature freezes, and confirmations before outward-facing steps apply in every mode, and work reaches the default branch only through `/vult-ship`, at full standards.
+
+The mode skills and the skills that push, merge, tag or release run only when you type them, and they confirm before each outward-facing step. The `production-reviewer` agent gives a read-only review of a diff or PR; `/vult-ship` uses it for non-trivial changes.
 
 ## Troubleshooting
 

@@ -42,7 +42,7 @@ $script:warnings = 0
 function Fail([string]$m) { Write-CcFail $m; $script:failures++ }
 function Warn([string]$m) { Write-CcWarn $m; $script:warnings++ }
 
-$expectedSkills = @('init-project', 'production-audit', 'issue', 'hotfix', 'vult-ship',
+$expectedSkills = @('vult-fast', 'vult-dev', 'vult-prod', 'init-project', 'production-audit', 'issue', 'hotfix', 'vult-ship',
     'release-candidate', 'promote-stable', 'handoff', 'resume-project')
 
 # Built-in Claude Code command names and aliases a skill must not reuse, or one
