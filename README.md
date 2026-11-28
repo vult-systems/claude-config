@@ -55,7 +55,7 @@ Setup never elevates, changes the execution policy or grants permissions. `-Exec
 | git over HTTPS | Git Credential Manager (browser, on first clone) or `gh auth setup-git` | `git ls-remote https://github.com/vult-systems/claude-config` | Windows Credential Manager |
 | Claude Code | `claude auth login` (or `/login` in a session) | `claude auth status` | your Claude home, outside this repo |
 
-`setup.cmd` runs each sign-in only if it's missing. None of these are ever copied into the repository. `validate.ps1` fails if credential files, tokens, private keys or history files are committed.
+`setup.cmd` runs each sign-in only if it's missing. If `claude auth status` fails or prints something setup can't read, setup and `validate.ps1` warn "Could not check Claude Code sign-in" with the error, and setup doesn't start a sign-in. Run `claude auth status` to see the full output. None of these are ever copied into the repository. `validate.ps1` fails if credential files, tokens, private keys or history files are committed.
 
 ## Synchronising workstations
 

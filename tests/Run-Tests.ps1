@@ -308,6 +308,62 @@ try {
     }
     Check '-Strict exits 2 on warnings' ($LASTEXITCODE -eq 2)
 
+    Write-Host '== Claude Code sign-in check tolerates extra output (#12)'
+    Check 'plain JSON, signed in' ((Get-ClaudeLoggedIn '{"loggedIn":true}') -eq $true)
+    Check 'plain JSON, signed out' ((Get-ClaudeLoggedIn '{"loggedIn":false}') -eq $false)
+    Check 'notice before the JSON' ((Get-ClaudeLoggedIn "Update installed, restart to apply`n{`n  `"loggedIn`": true`n}") -eq $true)
+    Check 'notice after the JSON' ((Get-ClaudeLoggedIn "{`"loggedIn`":true}`nA new version is available") -eq $true)
+    Check 'malformed JSON is unreadable' ($null -eq (Get-ClaudeLoggedIn '{"loggedIn":'))
+    Check 'JSON without loggedIn is unreadable' ($null -eq (Get-ClaudeLoggedIn '{"authMethod":"none"}'))
+    Check 'non-boolean loggedIn is unreadable' ($null -eq (Get-ClaudeLoggedIn '{"loggedIn":"true"}'))
+    Check 'plain text is unreadable' ($null -eq (Get-ClaudeLoggedIn 'Not logged in. Run claude auth login to authenticate.'))
+    Check 'empty output is unreadable' ($null -eq (Get-ClaudeLoggedIn ''))
+
+    # Each shim is a fake claude.cmd. It answers `auth status` only when --json
+    # is passed (otherwise text, as Claude Code does), so the flag is covered too.
+    $authCases = @{
+        'stderr-notice' = @('echo Update installed, restart to apply 1>&2', 'echo {"loggedIn":true}', 'exit /b 0')
+        'stdout-notice' = @('echo Claude Code has been updated.', 'echo {"loggedIn":true}', 'exit /b 0')
+        'signed-out'    = @('echo {"loggedIn":false,"authMethod":"none"}', 'exit /b 1')
+        'malformed'     = @('echo {"loggedIn":', 'exit /b 0')
+        'crash'         = @('echo Error: cannot read configuration 1>&2', 'exit /b 1')
+        'silent'        = @('exit /b 3')
+    }
+    $authPath = @{}
+    foreach ($k in $authCases.Keys) {
+        $d = Join-Path (Join-Path $work 'fake-auth') $k
+        [void](New-FakeTools $d)
+        $body = @('@echo off', 'if "%~1"=="--version" (echo 9.9.9 Claude Code& exit /b 0)', 'if not "%~3"=="--json" (echo Signed in with text output& exit /b 0)') + $authCases[$k]
+        Write-TextFile (Join-Path $d 'claude.cmd') (($body -join "`r`n") + "`r`n")
+        $authPath[$k] = "$d;$(Join-Path $env:SystemRoot 'System32')"
+    }
+    $authOf = { param([string]$Case) Invoke-WithEnv @{ Path = $authPath[$Case] } { Get-ClaudeAuthStatus } }
+    Check 'stderr notice with loggedIn true: signed in' ((& $authOf 'stderr-notice').State -eq 'signed-in')
+    Check 'Test-ClaudeAuth true despite a stderr notice' ((Invoke-WithEnv @{ Path = $authPath['stderr-notice'] } { Test-ClaudeAuth }) -eq $true)
+    Check 'stdout notice with loggedIn true: signed in' ((& $authOf 'stdout-notice').State -eq 'signed-in')
+    Check 'loggedIn false with exit 1: signed out' ((& $authOf 'signed-out').State -eq 'signed-out')
+    $st = & $authOf 'malformed'
+    Check 'malformed output: unknown, not signed out' ($st.State -eq 'unknown' -and $st.Detail -eq 'exit code 0, output not readable')
+    Check 'malformed output: stdout is not quoted' ($st.Detail -notmatch 'loggedIn')
+    $st = & $authOf 'crash'
+    Check 'command failure: unknown with the error' ($st.State -eq 'unknown' -and $st.Detail -match 'exit code 1: Error: cannot read configuration')
+    $st = & $authOf 'silent'
+    Check 'no output: unknown with the exit code' ($st.State -eq 'unknown' -and $st.Detail -eq 'exit code 3, no output')
+    Check 'Test-ClaudeAuth false when the check fails' (-not (Invoke-WithEnv @{ Path = $authPath['crash'] } { Test-ClaudeAuth }))
+
+    foreach ($case in @(
+            @{ Name = 'stderr-notice'; Expect = 'Claude Code signed in'; Warns = 0 },
+            @{ Name = 'signed-out'; Expect = 'Claude Code not signed in'; Warns = 1 },
+            @{ Name = 'crash'; Expect = 'Could not check Claude Code sign-in \(exit code 1: Error: cannot read configuration\)'; Warns = 1 })) {
+        $out = Invoke-WithEnv @{ Path = $authPath[$case.Name]; CLAUDE_CONFIG_DIR = $sb.Home; LOCALAPPDATA = (Join-Path $work 'empty'); APPDATA = (Join-Path $work 'empty') } {
+            & $ps -NoProfile -ExecutionPolicy Bypass -File (Join-Path $vr 'scripts\validate.ps1') 6>&1 2>&1 | Out-String
+        }
+        $summary = 'Validation passed \(0 warnings\)'
+        if ($case.Warns -gt 0) { $summary = "passed with $($case.Warns) warning\(s\)" }
+        Check "validate, $($case.Name): reports '$($case.Expect -replace '\\', '')'" ($out -match $case.Expect)
+        Check "validate, $($case.Name): counts $($case.Warns) warning(s)" ($out -match $summary)
+    }
+
     Write-Host '== PATH helpers (#6)'
     Check 'adds a missing entry' ((Add-PathEntry 'C:\a;C:\b' 'C:\c') -eq 'C:\a;C:\b;C:\c')
     Check 'adds to an empty PATH' ((Add-PathEntry '' 'C:\c') -eq 'C:\c')
@@ -416,6 +472,19 @@ try {
         Check "rerun exits $okCode" ($LASTEXITCODE -eq $okCode)
         Check 'rerun changes nothing' ($out -match 'Already up to date' -and $out -notmatch 'to your user PATH')
         Check 'rerun does not duplicate the PATH entry' (@((Get-UserPathRaw $sxKey) -split ';' | Where-Object { $_ -like '*.local\bin' }).Count -eq 1)
+
+        # Claude Code sign-in states in setup (#12): signed out is reported with
+        # the sign-in command; a failed check is reported as such, never as
+        # signed out, and no sign-in is offered for it.
+        foreach ($case in @(
+                @{ Name = 'signed-out'; Expect = 'Claude Code not signed in\. Run: claude auth login'; Absent = 'Could not check' },
+                @{ Name = 'crash'; Expect = 'Could not check Claude Code sign-in \(exit code 1: Error: cannot read configuration\)'; Absent = 'not signed in|Sign in to Claude Code' })) {
+            $caseEnv = $setupEnv.Clone(); $caseEnv['Path'] = $authPath[$case.Name]
+            $argList = @('/c', (Join-Path $vr 'setup.cmd'), '-NonInteractive', '-NoInstall', '-PathRegistryKey', $sxKey)
+            $out = Invoke-WithEnv $caseEnv { & cmd.exe @argList 2>&1 | Out-String }
+            Check "setup, $($case.Name): exits 2 with the warning" ($LASTEXITCODE -eq 2 -and $out -match $case.Expect)
+            Check "setup, $($case.Name): no other Claude sign-in message" ($out -notmatch $case.Absent)
+        }
 
         New-Item -ItemType Directory -Path (Join-Path $sxLocal 'Microsoft\WinGet\Links') -Force | Out-Null
         Write-TextFile (Join-Path $sxLocal 'Microsoft\WinGet\Links\claude.exe') 'x'
