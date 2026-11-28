@@ -284,7 +284,9 @@ if ($SkipAuth) {
     }
 
     if (Find-Tool 'claude') {
-        if (Test-ClaudeAuth) { Write-CcOk 'Claude Code signed in' }
+        $claudeAuth = Get-ClaudeAuthStatus
+        if ($claudeAuth.State -eq 'signed-in') { Write-CcOk 'Claude Code signed in' }
+        elseif ($claudeAuth.State -eq 'unknown') { Warn "Could not check Claude Code sign-in ($($claudeAuth.Detail)). Run: claude auth status   to see the error, then rerun setup" }
         elseif (Confirm-Action 'Sign in to Claude Code now? (opens your browser)') {
             [void](Invoke-Attached 'claude' @('auth', 'login'))
             if (Test-ClaudeAuth) { Write-CcOk 'Claude Code signed in' } else { Warn 'Claude Code sign-in did not complete. Rerun setup, or start claude and use /login' }

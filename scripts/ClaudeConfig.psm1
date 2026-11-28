@@ -97,21 +97,29 @@ function ConvertTo-Lf([string]$Text) {
 # ---------------------------------------------------------------- native commands
 
 # Runs a native command without letting Windows PowerShell 5.1 turn stderr
-# output into terminating errors. Returns @{ Code; Output }.
+# output into terminating errors. Returns @{ Code; Output; Stdout; Stderr }:
+# Output has both streams in order, Stdout and Stderr have one each.
 function Invoke-Exe {
     param([Parameter(Mandatory = $true)][string]$FilePath, [string[]]$Arguments = @())
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    $out = New-Object System.Collections.Generic.List[string]
+    $stdout = New-Object System.Collections.Generic.List[string]
+    $stderr = New-Object System.Collections.Generic.List[string]
     try {
-        $out = & $FilePath @Arguments 2>&1 | ForEach-Object { "$_" }
+        & $FilePath @Arguments 2>&1 | ForEach-Object {
+            $line = "$_"
+            $out.Add($line)
+            if ($_ -is [System.Management.Automation.ErrorRecord]) { $stderr.Add($line) } else { $stdout.Add($line) }
+        }
         $code = $LASTEXITCODE
     } catch {
-        $out = @("$_")
+        $out.Add("$_"); $stderr.Add("$_")
         $code = 1
     } finally {
         $ErrorActionPreference = $old
     }
-    return @{ Code = $code; Output = @($out) }
+    return @{ Code = $code; Output = $out.ToArray(); Stdout = $stdout.ToArray(); Stderr = $stderr.ToArray() }
 }
 
 function Invoke-Git {
@@ -675,9 +683,51 @@ function Test-GhAuth {
     return ($r.Code -eq 0)
 }
 
-function Test-ClaudeAuth {
-    $r = Invoke-Exe -FilePath 'claude' -Arguments @('auth', 'status')
-    try { return [bool]((ConvertFrom-Json -InputObject ($r.Output -join "`n")).loggedIn) } catch { return $false }
+# Reads the loggedIn flag from `claude auth status --json`. Returns $true or
+# $false, or $null when the text holds no JSON object with a boolean loggedIn.
+# Only the outermost {...} is parsed, so notices printed before or after the
+# JSON (e.g. after `claude update`) don't hide the result (#12).
+function Get-ClaudeLoggedIn([string]$Text) {
+    if (-not $Text) { return $null }
+    $start = $Text.IndexOf('{')
+    $end = $Text.LastIndexOf('}')
+    if ($start -lt 0 -or $end -le $start) { return $null }
+    try { $obj = ConvertFrom-Json -InputObject $Text.Substring($start, $end - $start + 1) } catch { return $null }
+    if ($null -eq $obj -or $null -eq $obj.PSObject.Properties['loggedIn']) { return $null }
+    if ($obj.loggedIn -isnot [bool]) { return $null }
+    return $obj.loggedIn
+}
+
+# Claude Code sign-in state: { State; Detail }. State is 'signed-in',
+# 'signed-out' (Claude Code reported loggedIn false), or 'unknown' (the command
+# failed or its output couldn't be read), so a broken check is never reported
+# as a missing sign-in (#12). A signed-out `claude auth status` exits 1, so the
+# exit code alone doesn't mean failure.
+function Get-ClaudeAuthStatus {
+    $r = Invoke-Exe -FilePath 'claude' -Arguments @('auth', 'status', '--json')
+    $loggedIn = Get-ClaudeLoggedIn ($r.Stdout -join "`n")
+    if ($loggedIn -eq $true) { return [pscustomobject]@{ State = 'signed-in'; Detail = '' } }
+    if ($loggedIn -eq $false) { return [pscustomobject]@{ State = 'signed-out'; Detail = '' } }
+    $first = @(@($r.Stderr) + @($r.Stdout) | Where-Object { "$_".Trim() } | Select-Object -First 1)
+    $detail = "exit code $($r.Code)"
+    if ($first.Count -gt 0) {
+        $line = "$($first[0])".Trim()
+        if ($line.Length -gt 160) { $line = $line.Substring(0, 160) + '...' }
+        $detail += ": $line"
+    } else { $detail += ', no output' }
+    return [pscustomobject]@{ State = 'unknown'; Detail = $detail }
+}
+
+function Test-ClaudeAuth { return ((Get-ClaudeAuthStatus).State -eq 'signed-in') }
+
+# Prints the Claude Code sign-in line for validate and bootstrap. Returns the
+# number of warnings printed (0 or 1).
+function Write-ClaudeAuthStatus($Status) {
+    switch ($Status.State) {
+        'signed-in' { Write-CcOk 'Claude Code signed in'; return 0 }
+        'signed-out' { Write-CcWarn 'Claude Code not signed in. Run setup.ps1, or: claude auth login   (or start claude and use /login)'; return 1 }
+        default { Write-CcWarn "Could not check Claude Code sign-in ($($Status.Detail)). Run: claude auth status   to see the error"; return 1 }
+    }
 }
 
 function Test-GitIdentity {
@@ -693,8 +743,7 @@ function Test-Auth {
         else { Write-CcWarn 'GitHub CLI not authenticated. Run setup.ps1, or: gh auth login --hostname github.com --git-protocol https --web'; $problems++ }
     }
     if (Get-Command claude -ErrorAction SilentlyContinue) {
-        if (Test-ClaudeAuth) { Write-CcOk 'Claude Code signed in' }
-        else { Write-CcWarn 'Claude Code not signed in. Run setup.ps1, or: claude auth login   (or start claude and use /login)'; $problems++ }
+        $problems += Write-ClaudeAuthStatus (Get-ClaudeAuthStatus)
     }
     if (Get-Command git -ErrorAction SilentlyContinue) {
         if (Test-GitIdentity) { Write-CcOk 'git identity configured' }
