@@ -708,13 +708,16 @@ function Get-ClaudeAuthStatus {
     $loggedIn = Get-ClaudeLoggedIn ($r.Stdout -join "`n")
     if ($loggedIn -eq $true) { return [pscustomobject]@{ State = 'signed-in'; Detail = '' } }
     if ($loggedIn -eq $false) { return [pscustomobject]@{ State = 'signed-out'; Detail = '' } }
-    $first = @(@($r.Stderr) + @($r.Stdout) | Where-Object { "$_".Trim() } | Select-Object -First 1)
+    # Quote only stderr: stdout can hold account details (email, organization)
+    # and this text ends up in output people paste into issues.
+    $first = @($r.Stderr | Where-Object { "$_".Trim() } | Select-Object -First 1)
     $detail = "exit code $($r.Code)"
     if ($first.Count -gt 0) {
         $line = "$($first[0])".Trim()
         if ($line.Length -gt 160) { $line = $line.Substring(0, 160) + '...' }
         $detail += ": $line"
-    } else { $detail += ', no output' }
+    } elseif (@($r.Stdout | Where-Object { "$_".Trim() }).Count -gt 0) { $detail += ', output not readable' }
+    else { $detail += ', no output' }
     return [pscustomobject]@{ State = 'unknown'; Detail = $detail }
 }
 

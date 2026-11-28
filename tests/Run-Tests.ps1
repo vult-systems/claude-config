@@ -343,7 +343,8 @@ try {
     Check 'stdout notice with loggedIn true: signed in' ((& $authOf 'stdout-notice').State -eq 'signed-in')
     Check 'loggedIn false with exit 1: signed out' ((& $authOf 'signed-out').State -eq 'signed-out')
     $st = & $authOf 'malformed'
-    Check 'malformed output: unknown, not signed out' ($st.State -eq 'unknown' -and $st.Detail -match 'exit code 0')
+    Check 'malformed output: unknown, not signed out' ($st.State -eq 'unknown' -and $st.Detail -eq 'exit code 0, output not readable')
+    Check 'malformed output: stdout is not quoted' ($st.Detail -notmatch 'loggedIn')
     $st = & $authOf 'crash'
     Check 'command failure: unknown with the error' ($st.State -eq 'unknown' -and $st.Detail -match 'exit code 1: Error: cannot read configuration')
     $st = & $authOf 'silent'
@@ -471,6 +472,19 @@ try {
         Check "rerun exits $okCode" ($LASTEXITCODE -eq $okCode)
         Check 'rerun changes nothing' ($out -match 'Already up to date' -and $out -notmatch 'to your user PATH')
         Check 'rerun does not duplicate the PATH entry' (@((Get-UserPathRaw $sxKey) -split ';' | Where-Object { $_ -like '*.local\bin' }).Count -eq 1)
+
+        # Claude Code sign-in states in setup (#12): signed out is reported with
+        # the sign-in command; a failed check is reported as such, never as
+        # signed out, and no sign-in is offered for it.
+        foreach ($case in @(
+                @{ Name = 'signed-out'; Expect = 'Claude Code not signed in\. Run: claude auth login'; Absent = 'Could not check' },
+                @{ Name = 'crash'; Expect = 'Could not check Claude Code sign-in \(exit code 1: Error: cannot read configuration\)'; Absent = 'not signed in|Sign in to Claude Code' })) {
+            $caseEnv = $setupEnv.Clone(); $caseEnv['Path'] = $authPath[$case.Name]
+            $argList = @('/c', (Join-Path $vr 'setup.cmd'), '-NonInteractive', '-NoInstall', '-PathRegistryKey', $sxKey)
+            $out = Invoke-WithEnv $caseEnv { & cmd.exe @argList 2>&1 | Out-String }
+            Check "setup, $($case.Name): exits 2 with the warning" ($LASTEXITCODE -eq 2 -and $out -match $case.Expect)
+            Check "setup, $($case.Name): no other Claude sign-in message" ($out -notmatch $case.Absent)
+        }
 
         New-Item -ItemType Directory -Path (Join-Path $sxLocal 'Microsoft\WinGet\Links') -Force | Out-Null
         Write-TextFile (Join-Path $sxLocal 'Microsoft\WinGet\Links\claude.exe') 'x'
